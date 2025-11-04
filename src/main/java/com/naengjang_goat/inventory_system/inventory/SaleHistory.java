@@ -1,0 +1,34 @@
+package com.naengjang_goat.inventory_system.inventory;
+
+import com.naengjang_goat.inventory_system.recipe.Recipe; // recipe 패키지의 Recipe 참조
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import java.time.LocalDateTime;
+
+/**
+ * '판매 기록'을 저장하는 엔티티
+ * '토마토 스파게티'가 '2개' 팔렸다.
+ */
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+public class SaleHistory {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // 어떤 메뉴(Recipe)가 팔렸는지
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recipe_id")
+    private Recipe recipe;
+
+    @Column(nullable = false)
+    private Integer quantitySold; // 판매 수량
+
+    @Column(nullable = false)
+    private LocalDateTime saleTimestamp; // 판매 시각
+}
