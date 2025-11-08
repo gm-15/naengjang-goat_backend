@@ -28,4 +28,5 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role; // 권한 (점주, 직원 등)
+    private boolean active = true;
 }
