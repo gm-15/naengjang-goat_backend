@@ -1,6 +1,6 @@
 package com.naengjang_goat.inventory_system.global.security;
 
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

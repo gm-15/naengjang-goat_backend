@@ -1,4 +1,4 @@
-package com.naengjang_goat.inventory_system.inventory;
+package com.naengjang_goat.inventory_system.inventory.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;

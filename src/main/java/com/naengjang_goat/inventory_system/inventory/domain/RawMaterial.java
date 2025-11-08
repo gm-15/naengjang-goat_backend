@@ -1,7 +1,7 @@
-package com.naengjang_goat.inventory_system.inventory;
+package com.naengjang_goat.inventory_system.inventory.domain;
 
-import com.naengjang_goat.inventory_system.recipe.UnitType;
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.recipe.domain.UnitType;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

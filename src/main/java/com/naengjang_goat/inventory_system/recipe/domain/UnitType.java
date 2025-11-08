@@ -1,4 +1,4 @@
-package com.naengjang_goat.inventory_system.recipe;
+package com.naengjang_goat.inventory_system.recipe.domain;
 
 public enum UnitType {
     WEIGHT, // 무게 (g, kg)

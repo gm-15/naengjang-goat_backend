@@ -1,7 +1,7 @@
 package com.naengjang_goat.inventory_system.user.dto;
 
-import com.naengjang_goat.inventory_system.user.Role;
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.user.domain.Role;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;

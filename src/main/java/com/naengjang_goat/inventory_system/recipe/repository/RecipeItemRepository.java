@@ -1,6 +1,6 @@
 package com.naengjang_goat.inventory_system.recipe.repository;
 
-import com.naengjang_goat.inventory_system.recipe.RecipeItem;
+import com.naengjang_goat.inventory_system.recipe.domain.RecipeItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

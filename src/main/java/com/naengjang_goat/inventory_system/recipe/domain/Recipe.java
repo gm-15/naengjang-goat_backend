@@ -1,6 +1,6 @@
-package com.naengjang_goat.inventory_system.recipe;
+package com.naengjang_goat.inventory_system.recipe.domain;
 
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,6 +36,8 @@ public class Recipe {
         items.add(item);
         item.setRecipe(this);
     }
+
+    private double price;
 
     // ✅ 점주와 N:1 관계 설정
     @ManyToOne(fetch = FetchType.LAZY)

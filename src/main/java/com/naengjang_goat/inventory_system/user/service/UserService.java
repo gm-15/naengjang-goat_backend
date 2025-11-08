@@ -1,11 +1,11 @@
 package com.naengjang_goat.inventory_system.user.service;
 
 import com.naengjang_goat.inventory_system.global.jwt.TokenProvider;
-import com.naengjang_goat.inventory_system.user.Role;
+import com.naengjang_goat.inventory_system.user.domain.Role;
 import com.naengjang_goat.inventory_system.user.dto.TokenResponseDto;
 import com.naengjang_goat.inventory_system.user.dto.UserLoginRequestDto;
 import com.naengjang_goat.inventory_system.user.dto.UserSignupRequestDto;
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;

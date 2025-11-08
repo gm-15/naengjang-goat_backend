@@ -1,4 +1,4 @@
-package com.naengjang_goat.inventory_system.user;
+package com.naengjang_goat.inventory_system.user.domain;
 
 /**
  * 사용자의 권한을 정의하는 Enum

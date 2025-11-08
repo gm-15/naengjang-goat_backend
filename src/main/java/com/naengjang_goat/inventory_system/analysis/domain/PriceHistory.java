@@ -1,6 +1,6 @@
-package com.naengjang_goat.inventory_system.analysis;
+package com.naengjang_goat.inventory_system.analysis.domain;
 
-import com.naengjang_goat.inventory_system.inventory.RawMaterial; // recipe 패키지의 RawMaterial 참조
+import com.naengjang_goat.inventory_system.inventory.domain.RawMaterial; // recipe 패키지의 RawMaterial 참조
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

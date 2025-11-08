@@ -1,6 +1,6 @@
 package com.naengjang_goat.inventory_system.inventory.repository;
 
-import com.naengjang_goat.inventory_system.inventory.RawMaterial;
+import com.naengjang_goat.inventory_system.inventory.domain.RawMaterial;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

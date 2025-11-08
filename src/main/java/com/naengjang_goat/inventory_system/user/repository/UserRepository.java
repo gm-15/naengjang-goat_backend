@@ -1,6 +1,6 @@
 package com.naengjang_goat.inventory_system.user.repository;
 
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.user.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -1,7 +1,7 @@
-package com.naengjang_goat.inventory_system.inventory;
+package com.naengjang_goat.inventory_system.inventory.domain;
 
-import com.naengjang_goat.inventory_system.recipe.Recipe; // recipe 패키지의 Recipe 참조
-import com.naengjang_goat.inventory_system.user.User;
+import com.naengjang_goat.inventory_system.recipe.domain.Recipe; // recipe 패키지의 Recipe 참조
+import com.naengjang_goat.inventory_system.user.domain.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +21,7 @@ public class SaleHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private double totalAmount;
 
     // 어떤 메뉴(Recipe)가 팔렸는지
     @ManyToOne(fetch = FetchType.LAZY)
