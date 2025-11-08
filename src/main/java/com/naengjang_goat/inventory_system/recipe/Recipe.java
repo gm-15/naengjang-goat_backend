@@ -1,5 +1,6 @@
 package com.naengjang_goat.inventory_system.recipe;
 
+import com.naengjang_goat.inventory_system.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,4 +36,9 @@ public class Recipe {
         items.add(item);
         item.setRecipe(this);
     }
+
+    // ✅ 점주와 N:1 관계 설정
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 }

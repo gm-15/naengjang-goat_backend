@@ -7,5 +7,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface SaleHistoryRepository extends JpaRepository<SaleHistory, Long> {
-    List<SaleHistory> findAllBySoldAtBetween(LocalDateTime start, LocalDateTime end);
+
+    // 점주별 + 기간별 매출 내역 조회
+    List<SaleHistory> findAllByUserIdAndSaleTimestampBetween(
+            Long userId,
+            LocalDateTime start,
+            LocalDateTime end
+    );
 }

@@ -1,5 +1,6 @@
 package com.naengjang_goat.inventory_system.recipe;
 
+import com.naengjang_goat.inventory_system.inventory.RawMaterial;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

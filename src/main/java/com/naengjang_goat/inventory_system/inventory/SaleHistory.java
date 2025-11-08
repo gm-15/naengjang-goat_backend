@@ -1,6 +1,7 @@
 package com.naengjang_goat.inventory_system.inventory;
 
 import com.naengjang_goat.inventory_system.recipe.Recipe; // recipe 패키지의 Recipe 참조
+import com.naengjang_goat.inventory_system.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,4 +32,9 @@ public class SaleHistory {
 
     @Column(nullable = false)
     private LocalDateTime saleTimestamp; // 판매 시각
+
+    // ✅ 점주와 N:1 관계 설정
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 }
