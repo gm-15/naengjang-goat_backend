@@ -31,4 +31,7 @@ public class RawMaterial {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
+
+    public RawMaterial(String 토마토, UnitType unitType, User user) {
+    }
 }

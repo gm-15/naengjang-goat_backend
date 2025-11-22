@@ -36,4 +36,11 @@ public class RecipeItem {
 
     @Column(nullable = false)
     private String unit; // 소모 단위 (예: g, ml, 개)
+
+    public RecipeItem(Recipe recipe, RawMaterial rawMaterial, Double quantity, String unit) {
+        this.recipe = recipe;
+        this.rawMaterial = rawMaterial;
+        this.quantity = quantity;
+        this.unit = unit;
+    }
 }

@@ -29,4 +29,12 @@ public class User {
     @Column(nullable = false)
     private Role role; // 권한 (점주, 직원 등)
     private boolean active = true;
+
+    public User(String username, String password, String ownerName, Role role) {
+        this.username = username;
+        this.password = password;
+        this.ownerName = ownerName;
+        this.role = role;
+        this.active = true;
+    }
 }

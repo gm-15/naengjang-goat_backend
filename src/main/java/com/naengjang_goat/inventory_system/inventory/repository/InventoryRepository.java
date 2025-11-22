@@ -9,4 +9,6 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     // raw_material_id 기준 1:1 매핑
     Optional<Inventory> findByRawMaterialId(Long rawMaterialId);
+    Optional<Inventory> findByRawMaterialName(String name);
+
 }

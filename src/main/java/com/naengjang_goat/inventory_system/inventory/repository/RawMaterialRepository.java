@@ -13,4 +13,7 @@ public interface RawMaterialRepository extends JpaRepository<RawMaterial, Long> 
 
     // 점주 기준 + 이름 중복 체크/조회
     Optional<RawMaterial> findByUserIdAndName(Long userId, String name);
+
+    Optional<RawMaterial> findByName(String name);
+
 }

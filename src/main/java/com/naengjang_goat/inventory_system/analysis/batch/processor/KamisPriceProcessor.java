@@ -1,17 +1,21 @@
-package com.naengjang_goat.inventory_system.batch.processor;
+package com.naengjang_goat.inventory_system.analysis.batch.processor;
 
-import com.naengjang_goat.inventory_system.batch.dto.KamisPriceDto;
+import com.naengjang_goat.inventory_system.analysis.batch.dto.KamisPriceDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
-@Component
+import java.time.LocalDate;
+
 @Slf4j
+@Component
 public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, KamisPriceDto> {
 
     @Override
     public KamisPriceDto process(KamisPriceDto item) {
-        log.info("📌 시세 처리: {}", item);
+
+        item.setPriceDate(LocalDate.now()); // 오늘 날짜 저장
+
         return item;
     }
 }
