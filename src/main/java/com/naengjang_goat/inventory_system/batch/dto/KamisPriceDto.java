@@ -1,4 +1,4 @@
-package com.naengjang_goat.inventory_system.analysis.batch.dto;
+package com.naengjang_goat.inventory_system.batch.dto;
 
 import lombok.Data;
 

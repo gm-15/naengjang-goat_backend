@@ -1,8 +1,8 @@
-package com.naengjang_goat.inventory_system.analysis.batch.service;
+package com.naengjang_goat.inventory_system.batch.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.naengjang_goat.inventory_system.analysis.batch.dto.KamisPriceDto;
+import com.naengjang_goat.inventory_system.batch.dto.KamisPriceDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,17 +45,17 @@ public class KamisApiClient {
                     "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
                     "&p_returntype=" + returnType;
 
-            log.info("🔗 Fetching KAMIS: {}", url);
+            log.info("KAMIS 요청 URL = {}", url);
 
             String response = restTemplate.getForObject(url, String.class);
 
-            JsonNode items = mapper.readTree(response)
+            JsonNode root = mapper.readTree(response)
                     .path("data")
                     .path("item");
 
             List<KamisPriceDto> result = new ArrayList<>();
 
-            for (JsonNode node : items) {
+            for (JsonNode node : root) {
                 KamisPriceDto dto = new KamisPriceDto();
                 dto.setProductName(node.path("item_name").asText());
                 dto.setUnit(node.path("unit").asText());
@@ -67,9 +67,8 @@ public class KamisApiClient {
             }
 
             return result;
-
         } catch (Exception e) {
-            log.error("❌ KAMIS API ERROR", e);
+            log.error("KAMIS API 호출 실패", e);
             return new ArrayList<>();
         }
     }
