@@ -38,6 +38,7 @@ public class KamisApiClient {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public List<KamisPriceDto> fetchDailySales() {
+
         try {
             String url = baseUrl +
                     "?action=" + URLEncoder.encode(dailyAction, StandardCharsets.UTF_8) +
@@ -45,30 +46,31 @@ public class KamisApiClient {
                     "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
                     "&p_returntype=" + returnType;
 
-            log.info("KAMIS 요청 URL = {}", url);
-
             String response = restTemplate.getForObject(url, String.class);
 
-            JsonNode root = mapper.readTree(response)
-                    .path("data")
-                    .path("item");
+            // ★★★★★ RAW 전체 응답 출력 — 반드시 확인해야 함
+            log.error("KAMIS RAW RESPONSE = {}", response);
 
-            List<KamisPriceDto> result = new ArrayList<>();
+            JsonNode root = mapper.readTree(response);
 
-            for (JsonNode node : root) {
+            // JSON 구조 파악 전까지 임시로 빈 리스트 리턴
+            List<KamisPriceDto> list = new ArrayList<>();
+
+            JsonNode items = root.path("data").path("item");
+
+            for (JsonNode n : items) {
                 KamisPriceDto dto = new KamisPriceDto();
-                dto.setProductName(node.path("item_name").asText());
-                dto.setUnit(node.path("unit").asText());
-                dto.setDpr1(node.path("dpr1").asText());
-                dto.setDpr2(node.path("dpr2").asText());
-                dto.setDpr3(node.path("dpr3").asText());
-                dto.setDpr4(node.path("dpr4").asText());
-                result.add(dto);
+                dto.setProductName(n.path("item_name").asText());
+                dto.setUnit(n.path("unit").asText());
+                dto.setDpr1(n.path("dpr1").asText());
+                dto.setDpr4(n.path("dpr4").asText());
+                list.add(dto);
             }
 
-            return result;
+            return list;
+
         } catch (Exception e) {
-            log.error("KAMIS API 호출 실패", e);
+            log.error("KAMIS API ERROR", e);
             return new ArrayList<>();
         }
     }

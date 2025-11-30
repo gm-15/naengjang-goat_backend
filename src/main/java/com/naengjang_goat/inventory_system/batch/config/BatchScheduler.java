@@ -2,7 +2,6 @@ package com.naengjang_goat.inventory_system.batch.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,10 +14,10 @@ public class BatchScheduler {
     private final JobLauncher jobLauncher;
     private final Job kamisDailyPriceJob;
 
-    //@Scheduled(cron = "0 0 6 * * *")
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelay = 10000)
     public void runKamisDailyJob() throws Exception {
-        JobParameters params = new JobParametersBuilder()
+
+        var params = new JobParametersBuilder()
                 .addLong("run.id", System.currentTimeMillis())
                 .toJobParameters();
 
