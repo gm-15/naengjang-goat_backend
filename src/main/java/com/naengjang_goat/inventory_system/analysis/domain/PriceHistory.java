@@ -9,6 +9,7 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Entity
+@Table(name = "price_history")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,10 +23,18 @@ public class PriceHistory {
     @JoinColumn(name = "raw_material_id")
     private RawMaterial rawMaterial;
 
+    @Column(name = "price_date")
     private LocalDate priceDate;
 
+    @Column(name = "product_name")
     private String productName;
+
+    @Column(name = "unit")
     private String unit;
+
+    @Column(name = "retail_price")
     private String retailPrice;
+
+    @Column(name = "wholesale_price")
     private String wholesalePrice;
 }

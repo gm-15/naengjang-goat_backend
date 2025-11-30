@@ -1,0 +1,8 @@
+kamis:
+api:
+  base-url: https://www.kamis.or.kr/service/price/xml.do
+  key: dummy
+  id: dummy
+  return-type: xml
+  action:
+    daily: dailyPriceByCategoryList

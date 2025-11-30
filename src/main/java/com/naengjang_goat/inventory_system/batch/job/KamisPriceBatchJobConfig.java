@@ -4,6 +4,7 @@ import com.naengjang_goat.inventory_system.batch.dto.KamisPriceDto;
 import com.naengjang_goat.inventory_system.batch.processor.KamisPriceProcessor;
 import com.naengjang_goat.inventory_system.batch.reader.KamisApiReader;
 import com.naengjang_goat.inventory_system.batch.writer.KamisPriceWriter;
+import com.naengjang_goat.inventory_system.analysis.domain.PriceHistory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -18,26 +19,26 @@ import org.springframework.transaction.PlatformTransactionManager;
 @RequiredArgsConstructor
 public class KamisPriceBatchJobConfig {
 
-    private final JobRepository jobRepository;
-    private final PlatformTransactionManager transactionManager;
     private final KamisApiReader reader;
     private final KamisPriceProcessor processor;
     private final KamisPriceWriter writer;
 
     @Bean
-    public Step kamisDailyStep() {
-        return new StepBuilder("kamisDailyStep", jobRepository)
-                .<KamisPriceDto, com.naengjang_goat.inventory_system.analysis.domain.PriceHistory>chunk(30, transactionManager)
-                .reader(reader)
-                .processor(processor)
-                .writer(writer)
+    public Job kamisPriceJob(JobRepository jobRepository, Step kamisPriceStep) {
+        return new JobBuilder("kamisPriceJob", jobRepository)
+                .start(kamisPriceStep)
                 .build();
     }
 
     @Bean
-    public Job kamisDailyPriceJob() {
-        return new JobBuilder("kamisDailyPriceJob", jobRepository)
-                .start(kamisDailyStep())
+    public Step kamisPriceStep(JobRepository jobRepository,
+                               PlatformTransactionManager tx) {
+
+        return new StepBuilder("kamisPriceStep", jobRepository)
+                .<KamisPriceDto, PriceHistory>chunk(50, tx)
+                .reader(reader)
+                .processor(processor)
+                .writer(writer)
                 .build();
     }
 }
