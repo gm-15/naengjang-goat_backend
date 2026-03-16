@@ -17,11 +17,16 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MockAuthFilter로 대체 (X-User-Id 헤더 기반 인증)
+ * 재활성화 조건: 실 배포 직전 Spring Security + JWT 복구 시
+ * 비활성화 일자: 2026-03-15
+ *
  * Spring Security의 핵심 설정 파일.
  * 인증/인가 로직과 JWT 필터를 구성합니다.
  */
-@Configuration
-@EnableWebSecurity
+// @Configuration  // [v2.1 비활성화]
+// @EnableWebSecurity  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class SecurityConfig {
 

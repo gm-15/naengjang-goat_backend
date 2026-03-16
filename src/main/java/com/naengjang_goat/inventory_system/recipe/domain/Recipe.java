@@ -9,10 +9,15 @@ import java.util.List;
 import java.util.ArrayList;
 
 /**
+ * [v2.1 비활성화]
+ * 비활성화 사유: Menu로 클래스명 변경 (menu/domain/Menu.java 참고)
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ *
  * 메뉴를 정의하는 엔티티
  * 예: 토마토 스파게티
  */
-@Entity
+// @Entity  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

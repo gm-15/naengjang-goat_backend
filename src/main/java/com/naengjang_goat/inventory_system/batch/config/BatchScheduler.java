@@ -7,8 +7,14 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: KamisPriceBatchJobConfig 비활성화로 Job 빈 없음
+ * 재활성화 조건: KAMIS 배치 복구 시
+ * 비활성화 일자: 2026-03-15
+ */
 @Slf4j
-@Component
+// @Component  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class BatchScheduler {
 

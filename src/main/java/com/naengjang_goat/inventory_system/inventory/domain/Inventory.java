@@ -5,7 +5,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: InventoryBatch로 대체 (FIFO + 유통기한 관리)
+ * 총 재고량 = InventoryBatch.quantity SUM으로 계산
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ */
+// @Entity  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

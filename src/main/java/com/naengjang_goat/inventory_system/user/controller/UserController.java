@@ -11,7 +11,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MockAuthFilter로 인증 대체
+ * 비활성화 일자: 2026-03-15
+ */
+// @RestController  // [v2.1 비활성화]
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {

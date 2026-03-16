@@ -1,0 +1,22 @@
+package com.naengjang_goat.inventory_system.inventory.repository;
+
+import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
+
+    // 점주별 전체 재료 조회 (Fetch Join으로 N+1 방지)
+    @Query("SELECT i FROM Ingredient i JOIN FETCH i.user WHERE i.user.id = :userId")
+    List<Ingredient> findAllByUserIdWithFetch(@Param("userId") Long userId);
+
+    // 점주 + 이름 기준 중복 체크
+    Optional<Ingredient> findByUserIdAndName(Long userId, String name);
+
+    // 이름으로 단건 조회
+    Optional<Ingredient> findByName(String name);
+}

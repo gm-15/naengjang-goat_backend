@@ -14,10 +14,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MockAuthFilter로 대체
+ * 재활성화 조건: 실 배포 직전 Spring Security + JWT 복구 시
+ * 비활성화 일자: 2026-03-15
+ *
  * 모든 요청에 대해 JWT 토큰을 검사하는 '보안 요원' 필터.
  * OncePerRequestFilter를 상속받아, 요청 당 단 한 번만 실행되도록 보장합니다.
  */
-@Component
+// @Component  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 

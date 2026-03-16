@@ -7,7 +7,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MenuController로 대체
+ * 비활성화 일자: 2026-03-15
+ */
+// @RestController  // [v2.1 비활성화]
 @RequestMapping("/recipes")
 @RequiredArgsConstructor
 public class RecipeController {

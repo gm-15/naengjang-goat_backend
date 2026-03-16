@@ -1,8 +1,20 @@
 kamis:
-api:
-  base-url: https://www.kamis.or.kr/service/price/xml.do
-  key: dummy
-  id: dummy
-  return-type: xml
-  action:
-    daily: dailyPriceByCategoryList
+  api:
+    base-url: https://www.kamis.or.kr/service/price/xml.do
+    key: dummy
+    id: dummy
+    return-type: xml
+    action:
+      daily: dailyPriceByCategoryList
+
+# 카오스 테스트에서 Circuit Breaker가 빠르게 열리도록 오버라이드
+# 3회 호출 중 2회 실패 시 (≥50%) OPEN 상태로 전환
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisLock:
+        slidingWindowSize: 3
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 1

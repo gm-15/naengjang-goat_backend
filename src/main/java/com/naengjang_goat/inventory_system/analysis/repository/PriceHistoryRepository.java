@@ -2,10 +2,17 @@ package com.naengjang_goat.inventory_system.analysis.repository;
 
 import com.naengjang_goat.inventory_system.analysis.domain.PriceHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.NoRepositoryBean;
 
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MarketPriceRepository로 대체
+ * 비활성화 일자: 2026-03-15
+ */
+@NoRepositoryBean
 public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long> {
 
     // 기존 코드 유지 --------------------------

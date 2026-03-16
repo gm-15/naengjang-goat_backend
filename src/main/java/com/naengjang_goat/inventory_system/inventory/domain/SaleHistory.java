@@ -8,7 +8,13 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-@Entity
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: Order + OrderItem으로 대체 (channel_type, order_status 추가)
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ */
+// @Entity  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

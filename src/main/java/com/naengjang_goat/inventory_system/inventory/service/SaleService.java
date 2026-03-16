@@ -18,7 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-@Service
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: OrderService로 대체 (LockStrategy + InventoryBatch FIFO)
+ * 재활성화 조건: v2.1 신규 서비스/컨트롤러 참고
+ * 비활성화 일자: 2026-03-15
+ */
+// @Service  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class SaleService {
 

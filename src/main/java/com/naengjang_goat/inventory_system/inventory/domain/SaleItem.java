@@ -6,7 +6,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: OrderItem으로 재설계 (unit_price 스냅샷 추가, FK 정리)
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ */
+// @Entity  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

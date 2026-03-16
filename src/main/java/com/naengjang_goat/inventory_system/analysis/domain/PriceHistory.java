@@ -8,8 +8,14 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "price_history")
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MarketPrice로 대체 (product_name 제거, ingredientId FK로 교체)
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ */
+// @Entity  // [v2.1 비활성화]
+// @Table(name = "price_history")  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

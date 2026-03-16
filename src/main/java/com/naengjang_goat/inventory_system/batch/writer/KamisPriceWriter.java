@@ -8,7 +8,12 @@ import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MarketPriceWriter로 대체 예정 (MarketPrice 엔티티로 교체 필요)
+ * 비활성화 일자: 2026-03-15
+ */
+// @Component  // [v2.1 비활성화]
 @RequiredArgsConstructor
 @Slf4j
 public class KamisPriceWriter implements ItemWriter<PriceHistory> {

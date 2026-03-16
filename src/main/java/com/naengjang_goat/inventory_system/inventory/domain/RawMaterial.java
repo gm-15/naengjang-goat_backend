@@ -8,10 +8,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
+ * [v2.1 비활성화]
+ * 비활성화 사유: Ingredient로 대체 (base_unit, warning_threshold 추가 / unitType enum 제거)
+ * 재활성화 조건: 없음 (영구 대체)
+ * 비활성화 일자: 2026-03-15
+ *
  * 원재료를 정의하는 엔티티
  * 예: 깐마늘, 파스타면, 토마토소스
  */
-@Entity
+// @Entity  // [v2.1 비활성화]
 @Getter
 @Setter
 @NoArgsConstructor

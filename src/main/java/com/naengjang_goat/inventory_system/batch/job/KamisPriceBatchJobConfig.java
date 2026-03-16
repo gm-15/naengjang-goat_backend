@@ -15,7 +15,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@Configuration
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: KamisPriceWriter/Processor 비활성화로 인한 연쇄 비활성화
+ * 비활성화 일자: 2026-03-15
+ */
+// @Configuration  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class KamisPriceBatchJobConfig {
 

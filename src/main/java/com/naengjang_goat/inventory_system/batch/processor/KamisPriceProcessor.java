@@ -8,7 +8,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
-@Component
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MarketPriceProcessor로 대체 예정
+ * 비활성화 일자: 2026-03-15
+ */
+// @Component  // [v2.1 비활성화]
 @Slf4j
 public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, PriceHistory> {
 

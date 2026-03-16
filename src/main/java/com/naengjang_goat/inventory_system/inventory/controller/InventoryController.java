@@ -7,7 +7,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: InventoryBatchController로 대체
+ * 재활성화 조건: v2.1 신규 서비스/컨트롤러 참고
+ * 비활성화 일자: 2026-03-15
+ */
+// @RestController  // [v2.1 비활성화]
 @RequestMapping("/inventory")
 @RequiredArgsConstructor
 public class InventoryController {

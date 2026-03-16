@@ -18,10 +18,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MockAuthFilter로 대체
+ * 재활성화 조건: 실 배포 직전 Spring Security + JWT 복구 시
+ * 비활성화 일자: 2026-03-15
+ *
  * JWT 토큰을 생성하고, 검증하고, 인증 정보를 추출하는 핵심 유틸리티 클래스
  * JJWT 라이브러리 0.12.x 버전에 최적화됨.
  */
-@Component
+// @Component  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class TokenProvider {
 

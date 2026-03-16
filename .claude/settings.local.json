@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew compileJava)",
+      "Bash(mysql -uroot -p43214321 inventory_db -e \":*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew compileTestJava)",
+      "Bash(docker start:*)",
+      "Bash(docker exec:*)"
+    ]
+  }
+}

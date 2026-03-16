@@ -8,7 +8,12 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;
 
-@Service
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MarketPriceService로 대체
+ * 비활성화 일자: 2026-03-15
+ */
+// @Service  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class PriceHistoryService {
 

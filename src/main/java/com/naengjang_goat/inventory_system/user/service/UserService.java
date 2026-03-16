@@ -18,9 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * User의 비즈니스 로직(회원가입, 로그인)을 처리하는 서비스 클래스
  */
-@Service
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MockAuthFilter로 인증 대체, PasswordEncoder/AuthenticationManager/TokenProvider 의존성 제거
+ * 비활성화 일자: 2026-03-15
+ */
+// @Service  // [v2.1 비활성화]
 @RequiredArgsConstructor
-@Transactional(readOnly = true) // 기본적으로 읽기 전용 트랜잭션 설정
+// @Transactional(readOnly = true) // [v2.1 비활성화] 기본적으로 읽기 전용 트랜잭션 설정
 public class UserService {
 
     private final UserRepository userRepository;

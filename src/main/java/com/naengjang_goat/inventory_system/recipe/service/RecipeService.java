@@ -9,7 +9,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-@Service
+/**
+ * [v2.1 비활성화]
+ * 비활성화 사유: MenuService로 대체
+ * 재활성화 조건: v2.1 신규 서비스/컨트롤러 참고
+ * 비활성화 일자: 2026-03-15
+ */
+// @Service  // [v2.1 비활성화]
 @RequiredArgsConstructor
 public class RecipeService {
 
