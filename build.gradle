@@ -46,6 +46,10 @@ dependencies {
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 
+	// Flyway — 자동 DB 마이그레이션 (V001, V002 순서대로 적용)
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-mysql'
+
 }
 
 tasks.named('test') {

@@ -42,7 +42,8 @@ public class NaverShoppingClient {
     public List<NaverShoppingItemDto> search(String query, int display) {
         try {
             // URI 템플릿 변수 방식: RestTemplate이 한글 등 비ASCII 문자를 자동 인코딩
-            String urlTemplate = baseUrl + "?query={query}&display={display}&sort=sim";
+            // sort=asc: 최저가순 (UC-CORE-2 명세 일치)
+            String urlTemplate = baseUrl + "?query={query}&display={display}&sort=asc";
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Naver-Client-Id", clientId);
@@ -79,6 +80,7 @@ public class NaverShoppingClient {
             dto.setLprice((String) item.get("lprice"));
             dto.setHprice((String) item.get("hprice"));
             dto.setMallName((String) item.get("mallName"));
+            dto.setProductId((String) item.get("productId"));
             dto.setBrand((String) item.get("brand"));
             dto.setMaker((String) item.get("maker"));
             dto.setCategory1((String) item.get("category1"));

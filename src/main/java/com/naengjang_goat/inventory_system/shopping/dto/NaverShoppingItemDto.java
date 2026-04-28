@@ -19,6 +19,7 @@ public class NaverShoppingItemDto {
     private String lprice;      // 최저가
     private String hprice;      // 최고가
     private String mallName;    // 판매처 이름
+    private String productId;   // 네이버 쇼핑 상품 고유 ID (price_records.raw_product_id 매핑)
     private String brand;       // 브랜드
     private String maker;       // 제조사
     private String category1;   // 카테고리 대분류
