@@ -1,7 +1,9 @@
 package com.naengjang_goat.inventory_system.inventory.controller;
 
 import com.naengjang_goat.inventory_system.inventory.dto.BatchResponse;
+import com.naengjang_goat.inventory_system.inventory.dto.LowStockItemDto;
 import com.naengjang_goat.inventory_system.inventory.repository.InventoryBatchRepository;
+import com.naengjang_goat.inventory_system.inventory.service.LowStockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +21,7 @@ import java.util.List;
 public class IngredientController {
 
     private final InventoryBatchRepository batchRepository;
+    private final LowStockService lowStockService;
 
     /**
      * GET /ingredients/{id}/batches
@@ -39,5 +42,33 @@ public class IngredientController {
                         .map(BatchResponse::from)
                         .toList();
         return ResponseEntity.ok(batches);
+    }
+
+    /**
+     * GET /ingredients/low-stock?userId={id}&limit={n}
+     * UC-CORE-1 — 재고 부족 상위 N개 재료 반환.
+     *
+     * 정렬: stockRatio(현재재고/기준재고) 오름차순 — 낮을수록 긴박
+     * 기본 limit: 5
+     *
+     * Response: [
+     *   {
+     *     "ingredientId": 3,
+     *     "ingredientName": "깻잎",
+     *     "currentStock": 0.300,
+     *     "baseUnit": "kg",
+     *     "warningThreshold": 1.000,
+     *     "stockRatio": 0.3,
+     *     "alert": true
+     *   }, ...
+     * ]
+     */
+    @GetMapping("/low-stock")
+    public ResponseEntity<List<LowStockItemDto>> getLowStock(
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "5") int limit
+    ) {
+        List<LowStockItemDto> result = lowStockService.getTopLowStock(userId, limit);
+        return ResponseEntity.ok(result);
     }
 }
