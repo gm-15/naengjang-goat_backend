@@ -11,20 +11,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * [v2.1 MockAuth 전용 Security 설정]
- * Spring Security를 비활성화하고 MockAuthFilter(X-User-Id 헤더)가 인증을 담당합니다.
- * 실 배포 시: 이 클래스 제거 + SecurityConfig의 @Configuration 주석 해제
+ * [v2.1 MockAuth 전용 Security 설정 — 비활성화]
+ * JWT 인증 복구로 SecurityConfig로 대체됨.
+ * PasswordEncoder, SecurityFilterChain Bean 은 SecurityConfig 에서 제공.
  */
-@Configuration
-@EnableWebSecurity
+// @Configuration  // [JWT 재활성화로 비활성화 — SecurityConfig 사용]
+// @EnableWebSecurity
 public class MockSecurityConfig {
 
-    @Bean
+    // @Bean — SecurityConfig.passwordEncoder() 와 충돌 방지
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
+    // @Bean — SecurityConfig.securityFilterChain() 과 충돌 방지
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -32,7 +32,7 @@ public class MockSecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll()  // MockAuthFilter가 인증 담당
+                        .anyRequest().permitAll()
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);

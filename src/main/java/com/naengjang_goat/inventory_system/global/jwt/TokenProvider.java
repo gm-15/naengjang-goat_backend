@@ -26,7 +26,7 @@ import java.util.Date;
  * JWT 토큰을 생성하고, 검증하고, 인증 정보를 추출하는 핵심 유틸리티 클래스
  * JJWT 라이브러리 0.12.x 버전에 최적화됨.
  */
-// @Component  // [v2.1 비활성화]
+@Component  // [v2.1 재활성화 — JWT 인증 복구]
 @RequiredArgsConstructor
 public class TokenProvider {
 

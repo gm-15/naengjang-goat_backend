@@ -37,6 +37,9 @@ public class Ingredient {
     @Column(name = "warning_threshold", precision = 10, scale = 3)
     private BigDecimal warningThreshold; // 최소 유지 재고량 — 이 수치 미만 시 발주 알림
 
+    @Column(name = "kamis_category", length = 20)
+    private String kamisCategory; // KAMIS 품목 카테고리 (KamisCategory enum name). nullable, 기본 VEGETABLES
+
     public Ingredient(User user, String name, String baseUnit, BigDecimal warningThreshold) {
         this.user = user;
         this.name = name;

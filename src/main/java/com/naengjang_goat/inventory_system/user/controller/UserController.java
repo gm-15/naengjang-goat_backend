@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 비활성화 사유: MockAuthFilter로 인증 대체
  * 비활성화 일자: 2026-03-15
  */
-// @RestController  // [v2.1 비활성화]
+@RestController  // [v2.1 재활성화 — JWT 인증 복구]
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {

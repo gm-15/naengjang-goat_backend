@@ -22,7 +22,7 @@ import java.io.IOException;
  *
  * 비활성화 일자: 2026-03-15 (Spring Security 비활성화 시점과 동일)
  */
-@Component
+// @Component  // [JWT 재활성화로 비활성화 — JwtAuthenticationFilter 사용]
 public class MockAuthFilter extends OncePerRequestFilter {
 
     public static final String USER_ID_HEADER = "X-User-Id";

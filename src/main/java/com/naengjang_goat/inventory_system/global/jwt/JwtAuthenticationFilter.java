@@ -22,7 +22,7 @@ import java.io.IOException;
  * 모든 요청에 대해 JWT 토큰을 검사하는 '보안 요원' 필터.
  * OncePerRequestFilter를 상속받아, 요청 당 단 한 번만 실행되도록 보장합니다.
  */
-// @Component  // [v2.1 비활성화]
+@Component  // [v2.1 재활성화 — JWT 인증 복구]
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 

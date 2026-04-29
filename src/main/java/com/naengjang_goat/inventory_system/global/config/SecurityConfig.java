@@ -25,8 +25,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Spring Security의 핵심 설정 파일.
  * 인증/인가 로직과 JWT 필터를 구성합니다.
  */
-// @Configuration  // [v2.1 비활성화]
-// @EnableWebSecurity  // [v2.1 비활성화]
+@Configuration   // [v2.1 재활성화 — JWT 인증 복구]
+@EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -72,8 +72,10 @@ public class SecurityConfig {
 
                 // 3. HTTP 요청 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        // '/api/users/signup'과 '/api/users/login' 경로는 인증 없이 누구나 접근 허용
+                        // 인증 없이 접근 허용
                         .requestMatchers("/api/users/signup", "/api/users/login").permitAll()
+                        // Admin 배치 수동 실행 — 개발·운영 편의. 실 배포 시 ROLE_ADMIN 조건 추가 가능
+                        .requestMatchers("/admin/**").permitAll()
                         // 그 외의 모든 요청은 반드시 인증(로그인)을 거쳐야 함
                         .anyRequest().authenticated()
                 )

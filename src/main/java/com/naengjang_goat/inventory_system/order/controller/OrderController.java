@@ -1,5 +1,6 @@
 package com.naengjang_goat.inventory_system.order.controller;
 
+import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
 import com.naengjang_goat.inventory_system.order.dto.OrderItemRequest;
 import com.naengjang_goat.inventory_system.order.dto.OrderRequest;
 import com.naengjang_goat.inventory_system.order.dto.OrderResponse;
@@ -8,13 +9,15 @@ import com.naengjang_goat.inventory_system.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * 주문 처리 컨트롤러 (v2.1)
- * MockAuthFilter가 X-User-Id 헤더를 request attribute로 주입함.
+ * 주문 처리 컨트롤러 (v2.2 — JWT 인증 복구)
+ *
+ * 인증: JWT Bearer Token
  */
 @RestController
 @RequestMapping("/orders")
@@ -29,19 +32,17 @@ public class OrderController {
      *
      * Request:  { "menuId": 1, "quantity": 2, "channelType": "POS" }
      * Response: { "orderId": 10, "status": "COMPLETED", "deductedBatches": [...] }
-     * Header:   X-User-Id: 1
      */
     @PostMapping
     public ResponseEntity<OrderResponse> placeOrder(
-            @RequestAttribute("userId") Long userId,
+            @AuthenticationPrincipal CustomUserDetails principal,
             @Valid @RequestBody PosOrderRequest request
     ) throws Exception {
-        // PosOrderRequest → OrderRequest(items 리스트) 어댑터
         OrderRequest orderRequest = new OrderRequest(
                 request.channelType(),
                 List.of(new OrderItemRequest(request.menuId(), request.quantity()))
         );
-        return ResponseEntity.ok(orderService.processOrder(userId, orderRequest));
+        return ResponseEntity.ok(orderService.processOrder(principal.getId(), orderRequest));
     }
 
     /**
@@ -50,8 +51,8 @@ public class OrderController {
      */
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getOrders(
-            @RequestAttribute("userId") Long userId
+            @AuthenticationPrincipal CustomUserDetails principal
     ) {
-        return ResponseEntity.ok(orderService.getOrders(userId));
+        return ResponseEntity.ok(orderService.getOrders(principal.getId()));
     }
 }

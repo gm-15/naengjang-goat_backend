@@ -23,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 비활성화 사유: MockAuthFilter로 인증 대체, PasswordEncoder/AuthenticationManager/TokenProvider 의존성 제거
  * 비활성화 일자: 2026-03-15
  */
-// @Service  // [v2.1 비활성화]
+@Service  // [v2.1 재활성화 — JWT 인증 복구]
 @RequiredArgsConstructor
-// @Transactional(readOnly = true) // [v2.1 비활성화] 기본적으로 읽기 전용 트랜잭션 설정
+@Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;

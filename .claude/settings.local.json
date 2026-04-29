@@ -7,11 +7,7 @@
       "Bash(./gradlew compileTestJava)",
       "Bash(docker start:*)",
       "Bash(docker exec:*)",
-      "Bash(cygpath -w /tmp/usecase_unpacked)",
-      "Bash(git ls-tree *)",
-      "Bash(git checkout *)",
-      "Bash(./gradlew build *)",
-      "Bash(git add *)"
+      "Bash(git push:*)"
     ]
   }
 }

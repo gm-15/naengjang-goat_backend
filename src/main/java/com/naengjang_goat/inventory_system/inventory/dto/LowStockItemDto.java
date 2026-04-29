@@ -1,22 +1,25 @@
 package com.naengjang_goat.inventory_system.inventory.dto;
 
-import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
+import com.naengjang_goat.inventory_system.inventory.domain.StockGrade;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDate;
 
 /**
- * UC-CORE-1 — 재고 부족 Top N 응답 DTO.
+ * UC-CORE-1 — 재고 부족 Top N 응답 DTO (v2, 2026-04-29).
  *
- * stockRatio: 현재 재고 / 기준 재고 (낮을수록 긴박)
- *   - 0.0 = 재고 없음
- *   - 0.5 = 기준량의 절반
- *   - 1.0+ = 여유
- * isAlert: stockRatio < 1.0 (기준 미달)
+ * stockRatio 공식 (확정):
+ *   currentStock / (nextOrderDayDistance × dailyAvgSales)
  *
- * warningThreshold 미설정 재료는 정렬 최후순위 (stockRatio = Double.MAX_VALUE).
+ * 등급 기준:
+ *   SUFFICIENT : > 60%   (초록)
+ *   NORMAL     : 30~60%  (노랑)
+ *   DANGER     : ≤ 30%   (빨강) + orderAlert 대상
+ *
+ * dailyAvgSales == 0 (판매 데이터 없음):
+ *   stockRatio = Double.MAX_VALUE → 정렬 최후순위, 알림 없음
  */
 @Getter
 @Builder
@@ -24,35 +27,28 @@ public class LowStockItemDto {
 
     private Long ingredientId;
     private String ingredientName;
-    private BigDecimal currentStock;  // SUM(batch.quantity), 단위: baseUnit
+    private BigDecimal currentStock;          // SUM(batch.quantity), 단위: baseUnit
     private String baseUnit;
-    private BigDecimal warningThreshold;  // null 가능 (미설정)
-    private double stockRatio;            // currentStock / warningThreshold
-    private boolean alert;                // stockRatio < 1.0
+    private BigDecimal dailyAvgSales;         // 일 평균 소모량 (baseUnit 기준)
+    private int nextOrderDayDistance;         // 오늘 ~ 다음 발주일 일수
+    private double stockRatio;               // currentStock / (nextOrderDayDistance × dailyAvgSales)
+    private StockGrade grade;                // SUFFICIENT / NORMAL / DANGER
+    private LocalDate estimatedDepletionDate; // 소진 예정일 (null = 판매 데이터 없음)
+    private boolean orderAlert;              // grade==DANGER AND depletionDate < nextOrderDayDate
 
-    public static LowStockItemDto of(Ingredient ingredient, BigDecimal currentStock) {
-        BigDecimal threshold = ingredient.getWarningThreshold();
-
-        double ratio;
-        boolean isAlert;
-
-        if (threshold == null || threshold.compareTo(BigDecimal.ZERO) <= 0) {
-            // 기준 미설정 → 정렬 최후순위, 알림 없음
-            ratio = Double.MAX_VALUE;
-            isAlert = false;
-        } else {
-            ratio = currentStock.divide(threshold, 4, RoundingMode.HALF_UP).doubleValue();
-            isAlert = ratio < 1.0;
-        }
-
+    /** DepletionResult → LowStockItemDto 변환 */
+    public static LowStockItemDto from(DepletionResult r) {
         return LowStockItemDto.builder()
-                .ingredientId(ingredient.getId())
-                .ingredientName(ingredient.getName())
-                .currentStock(currentStock)
-                .baseUnit(ingredient.getBaseUnit())
-                .warningThreshold(threshold)
-                .stockRatio(ratio)
-                .alert(isAlert)
+                .ingredientId(r.getIngredientId())
+                .ingredientName(r.getIngredientName())
+                .currentStock(r.getCurrentStock())
+                .baseUnit(r.getBaseUnit())
+                .dailyAvgSales(r.getDailyAvgSales())
+                .nextOrderDayDistance(r.getNextOrderDayDistance())
+                .stockRatio(r.getStockRatio())
+                .grade(r.getGrade())
+                .estimatedDepletionDate(r.getEstimatedDepletionDate())
+                .orderAlert(r.isOrderAlert())
                 .build();
     }
 }

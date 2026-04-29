@@ -50,6 +50,9 @@ dependencies {
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-mysql'
 
+	// Apache POI — Excel (.xlsx) 파싱 (재고 일괄 업로드 UC-SUP-*)
+	implementation 'org.apache.poi:poi-ooxml:5.3.0'
+
 }
 
 tasks.named('test') {
