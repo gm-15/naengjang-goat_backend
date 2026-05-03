@@ -8,15 +8,15 @@ import com.naengjang_goat.inventory_system.settings.domain.StoreSettings;
 import com.naengjang_goat.inventory_system.settings.repository.StoreSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -27,8 +27,9 @@ import java.util.stream.Collectors;
  *   - 영업 종료(closeTime) 3시간 전
  *
  * 중복 방지:
- *   - Redis SETNX: key = alert:{userId}:{date}:{slot}, TTL = 25h
- *   - 슬롯(open/close)별로 하루 1회만 발송
+ *   - 인메모리 Map (userId:slot → 마지막 발송 날짜)
+ *   - 슬롯(open/close)별로 날짜가 바뀌기 전까지 1회만 발송
+ *   - 서버 단일 인스턴스 운영 전제. 멀티 인스턴스로 확장 시 Redis SETNX로 교체.
  *
  * 알림 종류:
  *   1. 재고 부족 알림 — DepletionResult.orderAlert == true
@@ -44,11 +45,12 @@ public class AlertTriggerService {
 
     private static final int ALERT_BEFORE_HOURS  = 3;   // 영업 X시간 전 알림
     private static final int ALERT_WINDOW_MINUTES = 1;  // 체크 허용 오차 ±1분
-    private static final Duration DEDUP_TTL = Duration.ofHours(25); // 하루 중복 방지 TTL
+
+    /** key = "userId:slot", value = 마지막 발송 날짜. 자정이 지나면 날짜가 달라져 자동 리셋. */
+    private final Map<String, LocalDate> sentToday = new ConcurrentHashMap<>();
 
     private final StoreSettingsRepository settingsRepository;
     private final LowStockService lowStockService;
-    private final StringRedisTemplate redisTemplate;
     private final PriceTrendService priceTrendService;
 
     /**
@@ -60,7 +62,6 @@ public class AlertTriggerService {
     @Transactional(readOnly = true)
     public void triggerAlerts() {
         LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
-        String today = LocalDate.now().toString();
 
         List<StoreSettings> allSettings = settingsRepository.findAll();
         if (allSettings.isEmpty()) {
@@ -71,30 +72,24 @@ public class AlertTriggerService {
             Long userId = settings.getUser().getId();
 
             // 영업 시작 3시간 전 슬롯
-            if (isAlertTime(settings.getOpenTime(), now) && markAlertSent(userId, today, "open")) {
+            if (isAlertTime(settings.getOpenTime(), now) && markAlertSent(userId, "open")) {
                 checkAndAlert(userId, "open");
             }
             // 영업 종료 3시간 전 슬롯
-            if (isAlertTime(settings.getCloseTime(), now) && markAlertSent(userId, today, "close")) {
+            if (isAlertTime(settings.getCloseTime(), now) && markAlertSent(userId, "close")) {
                 checkAndAlert(userId, "close");
             }
         }
     }
 
     /**
-     * Redis SETNX로 하루 1회 알림 중복을 방지한다.
-     *
-     * key 가 없으면 SET 후 true 반환 → 알림 발송 OK.
-     * key 가 이미 있으면 false 반환 → 오늘 해당 슬롯 이미 처리됨.
-     *
-     * @param userId 점주 ID
-     * @param date   오늘 날짜 (yyyy-MM-dd)
-     * @param slot   "open" 또는 "close"
+     * 오늘 해당 슬롯 알림을 이미 보냈으면 false, 처음이면 기록 후 true 반환.
+     * put()의 반환값이 오늘 날짜이면 이미 발송한 것.
      */
-    private boolean markAlertSent(Long userId, String date, String slot) {
-        String key = String.format("alert:%d:%s:%s", userId, date, slot);
-        Boolean set = redisTemplate.opsForValue().setIfAbsent(key, "1", DEDUP_TTL);
-        return Boolean.TRUE.equals(set);
+    private boolean markAlertSent(Long userId, String slot) {
+        String key = userId + ":" + slot;
+        LocalDate today = LocalDate.now();
+        return !today.equals(sentToday.put(key, today));
     }
 
     /**
