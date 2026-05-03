@@ -53,11 +53,14 @@ public class LowStockService {
             return List.of();
         }
 
-        // 2. 각 재료 소진 계산 + 3. 정렬 + 4. limit
+        // 2. 발주일 거리 1회 계산 (동일 userId 이므로 루프 밖에서 처리 — store_settings N+1 방지)
+        int nextOrderDayDistance = depletionCalculatorService.calcNextOrderDayDistance(userId);
+
+        // 3. 각 재료 소진 계산 + 4. 정렬 + 5. limit
         return ingredientIds.stream()
                 .map(id -> {
                     try {
-                        DepletionResult result = depletionCalculatorService.calculate(userId, id);
+                        DepletionResult result = depletionCalculatorService.calculate(userId, id, nextOrderDayDistance);
                         return LowStockItemDto.from(result);
                     } catch (Exception e) {
                         log.warn("[LowStockService] 소진 계산 실패 ingredientId={}: {}", id, e.getMessage());

@@ -1,11 +1,17 @@
 package com.naengjang_goat.inventory_system.user.controller;
 
+import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
+import com.naengjang_goat.inventory_system.user.dto.OnboardRequest;
+import com.naengjang_goat.inventory_system.user.dto.OnboardResponse;
 import com.naengjang_goat.inventory_system.user.dto.TokenResponseDto;
 import com.naengjang_goat.inventory_system.user.dto.UserLoginRequestDto;
 import com.naengjang_goat.inventory_system.user.dto.UserSignupRequestDto;
+import com.naengjang_goat.inventory_system.user.service.OnboardService;
 import com.naengjang_goat.inventory_system.user.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final OnboardService onboardService;
 
     /**
      * 회원가입 API
@@ -44,6 +51,24 @@ public class UserController {
 
         // 3. HTTP 200 OK 상태와 함께 Body에 토큰 DTO를 담아 응답합니다.
         return ResponseEntity.ok(tokenResponse);
+    }
+
+    /**
+     * POST /api/users/onboard
+     * 가입 후 카테고리 선택 → 해당 카테고리 레시피 템플릿을 점주 메뉴로 자동 복사.
+     *
+     * Request:  { "categories": ["KOREAN", "WESTERN"] }
+     * Response: { "createdMenus": 41, "createdBom": 850, "newIngredients": [...] }
+     *
+     * newIngredients: 기존 재료와 매칭 못 해 새로 생성된 재료명 목록.
+     *                 requiredQuantity = 1 (placeholder) 로 생성되므로 직접 수정 필요.
+     */
+    @PostMapping("/onboard")
+    public ResponseEntity<OnboardResponse> onboard(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @Valid @RequestBody OnboardRequest request) {
+        OnboardResponse response = onboardService.onboard(principal.getId(), request);
+        return ResponseEntity.ok(response);
     }
 }
 

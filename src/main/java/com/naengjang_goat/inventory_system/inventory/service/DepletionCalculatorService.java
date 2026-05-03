@@ -47,6 +47,15 @@ public class DepletionCalculatorService {
 
     @Transactional(readOnly = true)
     public DepletionResult calculate(Long userId, Long ingredientId) {
+        return calculate(userId, ingredientId, calcNextOrderDayDistance(userId));
+    }
+
+    /**
+     * nextOrderDayDistance 를 외부에서 미리 계산해서 넘기는 오버로드.
+     * LowStockService 배치 처리처럼 동일 userId 로 N번 호출할 때 DB 조회를 1회로 줄임.
+     */
+    @Transactional(readOnly = true)
+    public DepletionResult calculate(Long userId, Long ingredientId, int nextOrderDayDistance) {
 
         // 1. 재료 기본 정보
         Ingredient ingredient = ingredientRepository.findById(ingredientId)
@@ -59,10 +68,7 @@ public class DepletionCalculatorService {
         // 3. 일 평균 소모량
         BigDecimal dailyAvgSales = dailySalesService.getDailyAvgSales(userId, ingredientId);
 
-        // 4. 다음 발주일까지 남은 일수
-        int nextOrderDayDistance = calcNextOrderDayDistance(userId);
-
-        // 5. stockRatio 계산
+        // 4. stockRatio 계산
         double stockRatio;
         if (dailyAvgSales.compareTo(BigDecimal.ZERO) == 0 || nextOrderDayDistance == 0) {
             // 판매 데이터 없음 → 정렬 최후순위, 알림 없음
@@ -72,10 +78,10 @@ public class DepletionCalculatorService {
             stockRatio = currentStock.divide(denominator, 4, RoundingMode.HALF_UP).doubleValue();
         }
 
-        // 6. 재고 등급
+        // 5. 재고 등급
         StockGrade grade = (stockRatio == Double.MAX_VALUE) ? StockGrade.SUFFICIENT : StockGrade.from(stockRatio);
 
-        // 7. 소진 예정일
+        // 6. 소진 예정일
         LocalDate estimatedDepletionDate = null;
         if (dailyAvgSales.compareTo(BigDecimal.ZERO) > 0) {
             long depletionDays = currentStock
@@ -84,7 +90,7 @@ public class DepletionCalculatorService {
             estimatedDepletionDate = LocalDate.now().plusDays(depletionDays);
         }
 
-        // 8. 발주 알림 여부
+        // 7. 발주 알림 여부
         boolean orderAlert = false;
         if (grade == StockGrade.DANGER && estimatedDepletionDate != null) {
             LocalDate nextOrderDate = LocalDate.now().plusDays(nextOrderDayDistance);

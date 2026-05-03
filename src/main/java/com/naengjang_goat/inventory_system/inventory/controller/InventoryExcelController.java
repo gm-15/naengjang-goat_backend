@@ -1,10 +1,16 @@
 package com.naengjang_goat.inventory_system.inventory.controller;
 
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
+import com.naengjang_goat.inventory_system.inventory.domain.InventoryBatch;
+import com.naengjang_goat.inventory_system.inventory.dto.BatchRequest;
+import com.naengjang_goat.inventory_system.inventory.dto.BatchResponse;
 import com.naengjang_goat.inventory_system.inventory.dto.ExcelUploadResultDto;
+import com.naengjang_goat.inventory_system.inventory.service.InventoryBatchService;
 import com.naengjang_goat.inventory_system.inventory.service.InventoryExcelService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -13,19 +19,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 /**
- * 재고 일괄 업로드 컨트롤러 (Excel .xlsx).
+ * 재고 입력 컨트롤러 (단건 JSON + Excel 일괄).
  *
- * POST /inventory/upload/excel
- *   Header : Authorization: Bearer {token}
- *   Body   : multipart/form-data, field="file" (.xlsx 파일)
+ * POST /inventory/batches         — 단건 재고 배치 입력 (JSON)
+ * POST /inventory/upload/excel    — 일괄 입고 (Excel .xlsx)
  *
- * 응답:
- *   200 OK  → { totalRows, successCount, failCount, errors[] }
- *   400     → 파일 미첨부 또는 .xlsx 아닌 파일
- *   500     → 파싱 불가 오류
- *
- * 엑셀 템플릿 컬럼 (1행=헤더 자동 스킵):
- *   A: 재료명 | B: 수량 | C: 단위 | D: 입고일(yyyy-MM-dd) | E: 유통기한(yyyy-MM-dd) | F: 단가
+ * 인증: JWT Bearer Token
  */
 @Slf4j
 @RestController
@@ -34,6 +33,24 @@ import java.io.IOException;
 public class InventoryExcelController {
 
     private final InventoryExcelService excelService;
+    private final InventoryBatchService batchService;
+
+    /**
+     * POST /inventory/batches
+     * 재고 배치 단건 입력.
+     *
+     * Request:  { "ingredientId": 1, "quantity": 10.0, "costPerUnit": 2500,
+     *             "inboundDate": "2026-05-03", "expirationDate": "2026-05-10" }
+     * Response: 201 Created — { batchId, quantity, expiresAt }
+     */
+    @PostMapping("/batches")
+    public ResponseEntity<BatchResponse> addBatch(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @Valid @RequestBody BatchRequest request) {
+
+        InventoryBatch batch = batchService.create(principal.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(BatchResponse.from(batch));
+    }
 
     @PostMapping("/upload/excel")
     public ResponseEntity<ExcelUploadResultDto> uploadExcel(

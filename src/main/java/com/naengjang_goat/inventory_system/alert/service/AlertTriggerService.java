@@ -2,30 +2,37 @@ package com.naengjang_goat.inventory_system.alert.service;
 
 import com.naengjang_goat.inventory_system.inventory.dto.LowStockItemDto;
 import com.naengjang_goat.inventory_system.inventory.service.LowStockService;
+import com.naengjang_goat.inventory_system.pricing.dto.PriceTrendResponse;
+import com.naengjang_goat.inventory_system.pricing.service.PriceTrendService;
 import com.naengjang_goat.inventory_system.settings.domain.StoreSettings;
 import com.naengjang_goat.inventory_system.settings.repository.StoreSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 재고 부족 알림 트리거 서비스.
+ * 재고 부족 + 가격 구매 적기 알림 트리거 서비스.
  *
  * 알림 타이밍:
  *   - 영업 시작(openTime) 3시간 전
  *   - 영업 종료(closeTime) 3시간 전
  *
- * 알림 조건:
- *   - DepletionResult.orderAlert == true (grade==DANGER AND 소진예정일 < 다음발주일)
+ * 중복 방지:
+ *   - Redis SETNX: key = alert:{userId}:{date}:{slot}, TTL = 25h
+ *   - 슬롯(open/close)별로 하루 1회만 발송
  *
- * 시간 허용 오차:
- *   - ±1분 윈도우 (스케줄러가 1분마다 실행되므로)
+ * 알림 종류:
+ *   1. 재고 부족 알림 — DepletionResult.orderAlert == true
+ *   2. 가격 구매 적기 알림 — PriceTrendResponse.currentBuySignal == true
  *
  * 현재 알림 방식: 로그 출력 (확장 포인트 주석 표시)
  * TODO: 실제 푸시 알림 (FCM/APNS) 연동 시 sendPush() 메서드 추가
@@ -37,19 +44,23 @@ public class AlertTriggerService {
 
     private static final int ALERT_BEFORE_HOURS  = 3;   // 영업 X시간 전 알림
     private static final int ALERT_WINDOW_MINUTES = 1;  // 체크 허용 오차 ±1분
+    private static final Duration DEDUP_TTL = Duration.ofHours(25); // 하루 중복 방지 TTL
 
     private final StoreSettingsRepository settingsRepository;
     private final LowStockService lowStockService;
+    private final StringRedisTemplate redisTemplate;
+    private final PriceTrendService priceTrendService;
 
     /**
      * 전체 점주 설정을 조회해 현재 시각이 알림 구간인 점주를 찾고,
-     * 해당 점주의 재고 부족 알림을 발송한다.
+     * 해당 점주의 재고 부족 + 가격 알림을 발송한다.
      *
      * 스케줄러에서 1분마다 호출.
      */
     @Transactional(readOnly = true)
     public void triggerAlerts() {
         LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
+        String today = LocalDate.now().toString();
 
         List<StoreSettings> allSettings = settingsRepository.findAll();
         if (allSettings.isEmpty()) {
@@ -57,45 +68,87 @@ public class AlertTriggerService {
         }
 
         for (StoreSettings settings : allSettings) {
-            boolean shouldAlert =
-                    isAlertTime(settings.getOpenTime(), now)
-                 || isAlertTime(settings.getCloseTime(), now);
+            Long userId = settings.getUser().getId();
 
-            if (shouldAlert) {
-                Long userId = settings.getUser().getId();
-                checkAndAlert(userId);
+            // 영업 시작 3시간 전 슬롯
+            if (isAlertTime(settings.getOpenTime(), now) && markAlertSent(userId, today, "open")) {
+                checkAndAlert(userId, "open");
+            }
+            // 영업 종료 3시간 전 슬롯
+            if (isAlertTime(settings.getCloseTime(), now) && markAlertSent(userId, today, "close")) {
+                checkAndAlert(userId, "close");
             }
         }
     }
 
     /**
-     * 점주의 저재고 목록을 계산해 발주 알림 대상 재료가 있으면 알림 발송.
+     * Redis SETNX로 하루 1회 알림 중복을 방지한다.
+     *
+     * key 가 없으면 SET 후 true 반환 → 알림 발송 OK.
+     * key 가 이미 있으면 false 반환 → 오늘 해당 슬롯 이미 처리됨.
      *
      * @param userId 점주 ID
+     * @param date   오늘 날짜 (yyyy-MM-dd)
+     * @param slot   "open" 또는 "close"
      */
-    private void checkAndAlert(Long userId) {
-        List<LowStockItemDto> lowStockItems = lowStockService.getTopLowStock(userId, Integer.MAX_VALUE);
+    private boolean markAlertSent(Long userId, String date, String slot) {
+        String key = String.format("alert:%d:%s:%s", userId, date, slot);
+        Boolean set = redisTemplate.opsForValue().setIfAbsent(key, "1", DEDUP_TTL);
+        return Boolean.TRUE.equals(set);
+    }
 
-        List<LowStockItemDto> alertTargets = lowStockItems.stream()
+    /**
+     * 점주의 재고 부족 알림 + 가격 구매 적기 알림을 처리한다.
+     *
+     * lowStockService 를 한 번만 호출해 두 알림에 공용으로 사용한다.
+     *
+     * @param userId 점주 ID
+     * @param slot   로그 구분용 ("open" / "close")
+     */
+    private void checkAndAlert(Long userId, String slot) {
+        // getTopLowStock 결과를 재고 알림 + 가격 알림 두 곳에 재사용
+        List<LowStockItemDto> items = lowStockService.getTopLowStock(userId, Integer.MAX_VALUE);
+
+        // ── 1. 재고 부족 알림 ─────────────────────────────────────────────
+        List<String> stockAlertNames = items.stream()
                 .filter(LowStockItemDto::isOrderAlert)
+                .map(LowStockItemDto::getIngredientName)
                 .collect(Collectors.toList());
 
-        if (alertTargets.isEmpty()) {
-            log.debug("[AlertTrigger] userId={} 발주 필요 재료 없음", userId);
-            return;
+        if (!stockAlertNames.isEmpty()) {
+            log.warn("[AlertTrigger][{}] ⚠ userId={} 발주 필요 {}건: [{}]",
+                    slot, userId, stockAlertNames.size(), String.join(", ", stockAlertNames));
+            // ── 확장 포인트 ────────────────────────────────────────────────
+            // TODO: FCM / APNS 푸시 알림 연동
+            //   pushService.sendStockAlert(userId, stockAlertNames);
+            // ──────────────────────────────────────────────────────────────
+        } else {
+            log.debug("[AlertTrigger][{}] userId={} 발주 필요 재료 없음", slot, userId);
         }
 
-        String ingredientNames = alertTargets.stream()
-                .map(LowStockItemDto::getIngredientName)
-                .collect(Collectors.joining(", "));
+        // ── 2. 가격 구매 적기 알림 ────────────────────────────────────────
+        List<String> buySignalNames = items.stream()
+                .map(item -> {
+                    try {
+                        PriceTrendResponse trend = priceTrendService.getTrend(item.getIngredientId(), 30);
+                        return trend.isCurrentBuySignal() ? item.getIngredientName() : null;
+                    } catch (Exception e) {
+                        log.debug("[AlertTrigger] buySignal 조회 실패 ingredientId={}: {}",
+                                item.getIngredientId(), e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(name -> name != null)
+                .collect(Collectors.toList());
 
-        log.warn("[AlertTrigger] ⚠ userId={} 발주 필요 재료 {}건: [{}]",
-                userId, alertTargets.size(), ingredientNames);
-
-        // ── 확장 포인트 ────────────────────────────────────────────
-        // TODO: FCM / APNS 푸시 알림 연동
-        //   pushService.sendStockAlert(userId, alertTargets);
-        // ──────────────────────────────────────────────────────────
+        if (!buySignalNames.isEmpty()) {
+            log.info("[AlertTrigger][{}] 💰 userId={} 구매 적기 재료 {}건: [{}]",
+                    slot, userId, buySignalNames.size(), String.join(", ", buySignalNames));
+            // ── 확장 포인트 ────────────────────────────────────────────────
+            // TODO: FCM / APNS 푸시 알림 연동
+            //   pushService.sendPriceAlert(userId, buySignalNames);
+            // ──────────────────────────────────────────────────────────────
+        }
     }
 
     /**
