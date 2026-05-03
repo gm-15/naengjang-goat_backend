@@ -35,3 +35,12 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Python (crawler) ###
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+crawler/**/debug_*.html
+crawler/**/.env
