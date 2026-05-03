@@ -28,14 +28,13 @@ db_config = {
     'port':     int(os.environ.get('DB_PORT', '3306')),
     'user':     os.environ.get('DB_USER', 'root'),
     'password': os.environ.get('DB_PASSWORD', ''),
-    'db':       os.environ.get('DB_NAME', 'nangjanggoat'),
+    'db':       os.environ.get('DB_NAME', 'naengjang_goat_db'),
     'charset':  'utf8mb4',
 }
 
 if not db_config['password']:
     print("❌ 환경변수 DB_PASSWORD 가 설정되어 있지 않습니다. .env 또는 쉘에서 지정하세요.")
     sys.exit(1)
-
 
 BASE_URL = "https://www.ewangmart.com"
 SALES_URL = f"{BASE_URL}/goods/sales.do"
@@ -63,7 +62,8 @@ _SKIP_TOKENS = {
 }
 
 
-def ensure_schema(conn):
+def assert_schema(conn):
+    """Flyway가 적용한 스키마가 존재하는지 검증만. 없으면 명확히 실패."""
     with conn.cursor() as cursor:
         cursor.execute(
             """
@@ -73,30 +73,70 @@ def ensure_schema(conn):
             (db_config['db'],),
         )
         cols = {row[0] for row in cursor.fetchall()}
-
-        if 'product_name' not in cols:
-            print("🔧 product_name 컬럼 추가 중...")
-            cursor.execute(
-                "ALTER TABLE price_records "
-                "ADD COLUMN product_name VARCHAR(255) NOT NULL DEFAULT '' AFTER source"
+        required = {'source', 'product_name', 'raw_product_id', 'weight_grams',
+                    'price', 'currency', 'is_discount', 'product_url', 'fetched_at'}
+        missing = required - cols
+        if missing:
+            raise RuntimeError(
+                f"price_records 에 다음 컬럼 누락: {missing}. "
+                "Java 앱(Flyway)이 먼저 기동되었는지 확인 필요."
             )
 
-        if 'is_discount' not in cols:
-            print("🔧 is_discount 컬럼 추가 중...")
-            cursor.execute(
-                "ALTER TABLE price_records "
-                "ADD COLUMN is_discount TINYINT(1) NOT NULL DEFAULT 0 AFTER currency"
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.statistics "
+            "WHERE table_schema = %s AND table_name = 'price_records' "
+            "AND index_name = 'uk_source_raw_date'",
+            (db_config['db'],),
+        )
+        if cursor.fetchone()[0] == 0:
+            raise RuntimeError(
+                "UNIQUE KEY uk_source_raw_date 누락. Flyway 적용 여부 확인 필요."
             )
 
-        conn.commit()
+
+_UNIT_TO_GRAMS = {
+    'kg': 1000.0,
+    'g':  1.0,
+    'l':  1000.0,   # 액체: 1g/mL 정수로만 INSERT. 밀도 보정은 백엔드 LiquidDensity.java 가 담당.
+    'ml': 1.0,
+}
+
+_PAT_VAL_UNIT_MULT = re.compile(
+    r'(\d+(?:\.\d+)?)\s*(kg|g|l|ml)\b\s*(?:[x×*]\s*(\d+))?',
+    re.IGNORECASE,
+)
+_PAT_MULT_VAL_UNIT = re.compile(
+    r'(\d+)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(kg|g|l|ml)\b',
+    re.IGNORECASE,
+)
 
 
-def reset_db(conn):
-    with conn.cursor() as cursor:
-        print("🧹 price_records 비우는 중...")
-        cursor.execute("TRUNCATE TABLE price_records;")
-    conn.commit()
-    print("✅ 초기화 완료")
+def parse_weight_grams(name):
+    """상품명에서 총 무게(g)를 추출. 실패 시 None."""
+    if not name:
+        return None
+    s = name.replace(',', '').lower()
+    candidates = []
+
+    for m in _PAT_VAL_UNIT_MULT.finditer(s):
+        value = float(m.group(1))
+        unit = m.group(2).lower()
+        mult = int(m.group(3)) if m.group(3) else 1
+        grams = value * _UNIT_TO_GRAMS[unit] * mult
+        if 0 < grams <= 100_000:
+            candidates.append(grams)
+
+    for m in _PAT_MULT_VAL_UNIT.finditer(s):
+        mult = int(m.group(1))
+        value = float(m.group(2))
+        unit = m.group(3).lower()
+        grams = value * _UNIT_TO_GRAMS[unit] * mult
+        if 0 < grams <= 100_000:
+            candidates.append(grams)
+
+    if not candidates:
+        return None
+    return int(round(max(candidates)))
 
 
 def wait_for_goods(driver, timeout=15):
@@ -263,21 +303,32 @@ def crawl_category(driver, cate_id, cate_name, discount_gnos, cursor, seen_gnos,
         items = extract_items(driver, debug_dump_path=dump_path)
 
         page_saved = 0
+        page_skipped = 0
         for gno, name, price in items:
             if gno in seen_gnos:
                 continue
             seen_gnos.add(gno)
             is_discount = 1 if gno in discount_gnos else 0
+            weight_grams = parse_weight_grams(name)
             product_url = f"{BASE_URL}/goods/detail.do?gno={gno}"
             cursor.execute(
-                "INSERT INTO price_records "
-                "(source, product_name, price, currency, is_discount, product_url, fetched_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-                (source, name, price, 'KRW', is_discount, product_url),
+                "INSERT IGNORE INTO price_records "
+                "(source, product_name, raw_product_id, weight_grams, "
+                " price, currency, is_discount, product_url, fetched_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+                (source, name, gno, weight_grams,
+                 price, 'KRW', is_discount, product_url),
             )
-            page_saved += 1
-            saved += 1
-        print(f"   [{page_idx + 1}/{total}] 저장 {page_saved}개 (카테고리 누적 {saved})")
+            if cursor.rowcount > 0:
+                page_saved += 1
+                saved += 1
+            else:
+                page_skipped += 1  # UNIQUE 충돌 (오늘 이미 저장된 row)
+        msg = f"   [{page_idx + 1}/{total}] 저장 {page_saved}개"
+        if page_skipped:
+            msg += f" (중복 skip {page_skipped})"
+        msg += f" (카테고리 누적 {saved})"
+        print(msg)
 
     return saved
 
@@ -299,6 +350,7 @@ def crawl_all():
 
         seen_gnos = set()
         grand_total = 0
+        discount_hits = 0
 
         for idx, (cate_id, cate_name) in enumerate(CATEGORIES):
             saved = crawl_category(
@@ -308,6 +360,7 @@ def crawl_all():
             )
             grand_total += saved
 
+        # 실제 저장된 할인 플래그 개수 집계
         cursor.execute("SELECT COUNT(*) FROM price_records WHERE is_discount = 1")
         discount_hits = cursor.fetchone()[0]
 
@@ -323,10 +376,11 @@ def crawl_all():
 
 
 if __name__ == "__main__":
+    # 스키마는 Java 앱(Flyway V001/V002 등)이 책임짐. 여기선 존재 여부만 검증.
     conn = pymysql.connect(**db_config)
     try:
-        ensure_schema(conn)
-        reset_db(conn)
+        assert_schema(conn)
     finally:
         conn.close()
+    # append-only: TRUNCATE 제거. UNIQUE(source, raw_product_id, DATE) + INSERT IGNORE 로 idempotent.
     crawl_all()
