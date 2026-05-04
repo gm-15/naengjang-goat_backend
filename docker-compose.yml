@@ -33,13 +33,18 @@ services:
       - "8080:8080"
     environment:
       # DB — mysql 서비스 이름으로 접근
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/naengjang_goat_db?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: 43214321
+      DB_URL: jdbc:mysql://mysql:3306/naengjang_goat_db?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+      DB_USERNAME: root
+      DB_PASSWORD: 43214321
       # Redis — redis 서비스 이름으로 접근
       REDIS_ADDRESS: redis://redis:6379
       # Spring Batch — MySQL 환경에서 메타 테이블 자동 생성
       SPRING_BATCH_JDBC_INITIALIZE_SCHEMA: always
+      # 민감값 — 프로덕션에서 .env 또는 Secrets Manager로 교체 권장
+      # JWT_SECRET: <prod-secret>
+      # KAMIS_API_KEY: <prod-key>
+      # NAVER_CLIENT_ID: <prod-id>
+      # NAVER_CLIENT_SECRET: <prod-secret>
     depends_on:
       mysql:
         condition: service_healthy
