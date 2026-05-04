@@ -19,4 +19,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
 
     // 이름으로 단건 조회
     Optional<Ingredient> findByName(String name);
+
+    // EKAPE 연동: LIVESTOCK 카테고리 재료 전체 조회
+    List<Ingredient> findByKamisCategory(String kamisCategory);
 }

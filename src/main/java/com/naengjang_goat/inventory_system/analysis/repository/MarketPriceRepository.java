@@ -20,4 +20,7 @@ public interface MarketPriceRepository extends JpaRepository<MarketPrice, Long> 
 
     // 최신순 전체 조회
     List<MarketPrice> findAllByOrderByReportedDateDesc();
+
+    // EKAPE 중복 삽입 방지 (ingredientId + 날짜 + 출처 조합 존재 여부)
+    boolean existsByIngredientIdAndReportedDateAndSource(Long ingredientId, LocalDate reportedDate, String source);
 }

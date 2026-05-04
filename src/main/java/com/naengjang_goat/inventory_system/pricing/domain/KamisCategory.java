@@ -14,8 +14,14 @@ package com.naengjang_goat.inventory_system.pricing.domain;
  *                ※ 파는 계절성 강해 intra-year CV 높음
  *
  *   LIVESTOCK  : periodProductList API 미지원 (축산물 = 축산물품질평가원 EKAPE 별도 시스템)
- *                EKAPE 소비자가격 72개월 (2020~2025) CV ≈ 6.3%
- *                → B2B 도매가 변동은 더 클 것으로 추정, 보수적 0.08 유지
+ *                EKAPE 소비자가격 ekapepia.com (6년, 월별, aggregationUnit=MONTH) 실측:
+ *                  소 등심 1등급(lt=4301,spec=22,grade=03): 4.3%
+ *                  소 양지 1등급(lt=4301,spec=40,grade=03): 2.9%
+ *                  돼지 삼겹살(lt=4304,spec=27):           8.3%
+ *                  닭 육계kg(lt=9901,spec=99):             3.9%
+ *                  4품목 소비자가격 단순평균 ≈ 4.9%
+ *                → B2B 도매가는 소비자가격보다 변동 더 클 것으로 추정, 보수적 0.08 유지
+ *                  (삼겹살 소비자가격 CV 8.3% 기준 거의 1:1, 전체 평균 4.9%의 약 1.6배)
  *
  *   SEAFOOD    : 고등어(7.7%)·명태(5.6%) → avg 6.7% → 0.07
  *                ※ 오징어 데이터 미확보, 2품목 기준
@@ -38,7 +44,7 @@ package com.naengjang_goat.inventory_system.pricing.domain;
 public enum KamisCategory {
 
     VEGETABLES(0.17),  // 채소류: 배추·양파·무·파 intra-year CV avg 16.6% (6년)
-    LIVESTOCK (0.08),  // 축산물: EKAPE 소비자가격 CV 6.3%, B2B 추정 보수적 유지
+    LIVESTOCK (0.08),  // 축산물: EKAPE 소비자가격 4품목 avg 4.9% (삼겹살 8.3%), B2B 추정 보수적 유지
     SEAFOOD   (0.07),  // 수산물: 고등어·명태 intra-year CV avg 6.7% (6년)
     FRUITS    (0.13),  // 과일류: 배·사과후지 intra-year CV avg 12.6% (6년)
     GRAINS    (0.05),  // 곡물류: 쌀 intra-year CV 4.5% (6년)

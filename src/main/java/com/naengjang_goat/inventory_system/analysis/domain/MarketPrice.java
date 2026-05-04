@@ -44,6 +44,9 @@ public class MarketPrice {
     @Column(name = "reported_date", nullable = false)
     private LocalDate reportedDate; // 시세 공표일
 
+    @Column(name = "source", nullable = false, length = 10)
+    private String source = "KAMIS"; // 출처: KAMIS | EKAPE
+
     public MarketPrice(Ingredient ingredient, String retailPrice, String wholesalePrice,
                        String unit, LocalDate reportedDate) {
         this.ingredient = ingredient;
@@ -51,5 +54,6 @@ public class MarketPrice {
         this.wholesalePrice = wholesalePrice;
         this.unit = unit;
         this.reportedDate = reportedDate;
+        this.source = "KAMIS";
     }
 }

@@ -58,27 +58,30 @@ public class DataInitializer implements ApplicationRunner {
             new IngredientSeed("사과",   "개", "FRUITS", new BigDecimal("10")),
             new IngredientSeed("배",     "개", "FRUITS", new BigDecimal("5")),
             // 곡물류 (cat=100)
-            new IngredientSeed("쌀",     "g",  "GRAINS", new BigDecimal("5000"))
+            new IngredientSeed("쌀",     "g",  "GRAINS", new BigDecimal("5000")),
+            // 축산물 (EKAPE) — EkapeApiClient 키워드 매핑 대상
+            new IngredientSeed("삼겹살", "g",  "LIVESTOCK", new BigDecimal("500")),
+            new IngredientSeed("목심",   "g",  "LIVESTOCK", new BigDecimal("300")),
+            new IngredientSeed("닭고기", "g",  "LIVESTOCK", new BigDecimal("500")),
+            new IngredientSeed("등심",   "g",  "LIVESTOCK", new BigDecimal("300"))
     );
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByUsername(DEMO_USERNAME)) {
-            log.info("[DataInitializer] 데모 유저 이미 존재 — 스킵");
-            return;
-        }
+        // 데모 유저 조회 or 생성
+        User demo = userRepository.findByUsername(DEMO_USERNAME).orElseGet(() -> {
+            User created = userRepository.save(new User(
+                    DEMO_USERNAME,
+                    passwordEncoder.encode(DEMO_PASSWORD),
+                    "데모점주",
+                    Role.OWNER
+            ));
+            log.info("[DataInitializer] 데모 유저 생성 → id={}", created.getId());
+            return created;
+        });
 
-        // 데모 유저 생성
-        User demo = userRepository.save(new User(
-                DEMO_USERNAME,
-                passwordEncoder.encode(DEMO_PASSWORD),
-                "데모점주",
-                Role.OWNER
-        ));
-        log.info("[DataInitializer] 데모 유저 생성 → id={}", demo.getId());
-
-        // KAMIS 매칭용 ingredient 시드 생성
+        // KAMIS/EKAPE 매칭용 ingredient 시드 — 미존재 항목만 생성 (멱등)
         int count = 0;
         for (IngredientSeed seed : SEEDS) {
             boolean exists = ingredientRepository
@@ -91,7 +94,12 @@ public class DataInitializer implements ApplicationRunner {
                 count++;
             }
         }
-        log.info("[DataInitializer] ingredient 시드 {}종 생성 완료", count);
+
+        if (count > 0) {
+            log.info("[DataInitializer] ingredient 시드 {}종 생성 완료", count);
+        } else {
+            log.info("[DataInitializer] ingredient 시드 모두 이미 존재 — 스킵");
+        }
         log.info("[DataInitializer] 로그인 정보 → username={} / password={}", DEMO_USERNAME, DEMO_PASSWORD);
     }
 
