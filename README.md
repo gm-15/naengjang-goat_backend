@@ -1,472 +1,293 @@
-# 냉장GOAT — Procurement-Centered Inventory Backend for Independent Restaurants
+# 냉장GOAT — 자영업자 발주 자동화 백엔드
 
-> A Spring Boot 3.5 / Java 21 backend designed around a single interview-derived insight: **for an independent restaurant owner, procurement is the largest single consumer of time** (per-week phone/text orders to 5+ vendors, weekly cost-rate calculations, lost sales from stockouts, ad-hoc borrowing from sister restaurants when an order is missed). Every architectural decision in this project is aligned to one of three **procurement-decision axes** — *priority* (what runs out first), *price* (where to buy at what cost), and *timing* (when to order). The engineering pillars below — concurrency control and multi-source price integration — are not separate showcases; they are the technical means to those procurement-decision ends.
+> 사장님 인터뷰에서 발견된 한 가지 사실 — **"발주가 사장님 시간의 가장 큰 소비자"** — 를 중심으로 설계된 Spring Boot 3.5 / Java 21 백엔드.
+> 캡스톤 팀 프로젝트, 박건우 백엔드 리드.
 
-🇰🇷 한국어 버전: [README.ko.md](README.ko.md)
-📜 v1 시점 README (역사적 보존): [README_0315.md](README_0315.md)
+🇬🇧 영문 버전: [README.en.md](README.en.md) · 📜 v1 시점 보존본: [README_0315.md](README_0315.md)
 
 ---
 
-## 🥩 The Pain Point (Where the Project Started)
+## 🚀 30초 요약 (면접관용)
 
-Two field interviews — a barbecue place in Songtan and a 막창 (grilled-tripe) restaurant in Yongin — surfaced a remarkably consistent pattern. The owner's most expensive recurring activity, week after week, was procurement:
+| 항목 | 내용 |
+|---|---|
+| 한 줄 | 자영업 식자재 **발주 의사결정 지원** 백엔드 (배달앱·POS·키오스크 3채널) |
+| 박건우 역할 | 캡스톤 백엔드 리드 (sim 팀원 1명과 협업) |
+| 핵심 기술 | Spring Boot 3.5 · Java 21 · MySQL 8 · Redis · Spring Batch · Flyway · Resilience4j |
+| 검증된 자산 | 4종 락 전략 비교 (500-스레드 카오스 테스트) · 4-소스 가격 통합 (`GENERATED COLUMN STORED`) · KAMIS·EKAPE 6년 실측 buy-signal threshold |
+| 진행 상황 | 동시성 축 검증 완료 / 가격 통합 모듈 빌드 통과 / **발주 시점 예측·알림(UC-CORE-3)은 미구현** |
+| 의도적으로 안 한 것 | "30분 절약" 같은 운영 결과 표현 일체 X (UC-CORE-3 미구현이므로) |
 
-| Pain | Source | Frequency |
+---
+
+## 🍳 어떤 문제를 풀고 있나? (도메인 설명, 비전공자도 OK)
+
+식당 사장님은 매일 새벽 식자재 거래처 5곳에 일일이 문자·전화로 발주를 넣고, 가격은 손으로 비교하고, 재고는 종이에 적어 가며 발주량을 계산합니다. 송탄점·용인 막창점 두 매장 사장님을 직접 인터뷰한 결과 페인포인트가 한 가지로 수렴했습니다 — 사장님의 시간을 가장 많이 잡아먹는 일은 **발주**입니다.
+
+| 페인포인트 | 매장 | 빈도 |
 |---|---|---|
-| Sending individual texts/calls to ~5 vendors per ordering cycle | Songtan | weekly |
-| Stockouts that block sales | Songtan | 3–6 / month |
-| Borrowing missing ingredients from a sister restaurant after a missed order | Yongin | confirmed |
-| Manual cost-rate calculation (40–50% margin tracking) | Yongin | continuous |
-| Hand-counted inventory → manual order-quantity arithmetic | both | 3–5 hours / week |
+| 거래처 5곳에 개별 문자·전화 발주 | 송탄점 | 매주 |
+| 재료 부족으로 판매 불가 | 송탄점 | 월 3~6건 |
+| 발주 미스로 옆 매장에서 재료 빌림 | 용인 막창점 | 실제 발생 |
+| 발주용 가격·시세 수동 비교 (원가율 40~50% 직접 계산) | 용인 막창점 | 상시 |
+| 손글씨 재고 확인 → 발주량 계산 | 양쪽 공통 | **주당 3~5시간** |
 
-A 2026-04-05 reframing (`plan.md`) made this explicit: "the engine is a Lamborghini but there is no driver's seat." The engineering invariants this project was already building — concurrency, integrity, fallback — were correct, but the *user* (the owner) had no reason to pay for any of them. The project was repositioned around the owner's procurement workflow, and the three core use cases were aligned accordingly:
-
-| Procurement-decision axis | Use case | Question it answers |
-|---|---|---|
-| Priority | UC-CORE-1 — top 5 inventory at risk | *"What is about to run out?"* |
-| Price | UC-CORE-2 — top 5 lowest unit-price across sources | *"Where, at what price, should I buy it?"* |
-| Timing | UC-CORE-3 — order-timing forecast + alert | *"When should I place the order?"* |
-| (history) | UC-SUP-8 — purchase-order ledger | (data substrate for V1 trend / forecast features) |
+→ 이 시스템의 목표는 **발주 의사결정 3축**을 코드로 지원하는 것입니다. 우선순위 *(뭐가 떨어질까)* · 가격 *(어디서 얼마에 사야 할까)* · 타이밍 *(언제 시킬까)*.
 
 ---
 
-## ✨ At a Glance
+## 🔄 v0 → v2 컨셉 피봇 — "엔진은 람보르기니인데 운전석이 없다"
 
-- **Capstone team project** — backend lead role
-- **Two engineering pillars, one business goal**
-  - Pillar 1 (v1, verified): **Concurrency control** — four runtime-swappable lock strategies + Resilience4j circuit-breaker fallback. Supports the multi-channel side of procurement (POS · delivery apps · kiosk all touching the same inventory) and proves data integrity before any of the higher-level procurement features can rely on it.
-  - Pillar 2 (v2, designed & compiling): **Multi-source price integration** — KAMIS public-market data + Naver Shopping API + a B2B Selenium crawler unified through MySQL `GENERATED COLUMN STORED`. Implements the *price* axis (UC-CORE-2).
-- **🚧 Honest gap** — the *timing* axis (UC-CORE-3) and the purchase-order ledger (UC-SUP-8) — i.e. the parts most directly tied to "saving the owner's time" — **are not yet implemented**. Roadmap below; English-portfolio claims are scoped accordingly.
+v0(2026-03 이전)은 동시성 락 전략 데모였습니다. 기술 자랑 중심으로 "재고 정합성을 코드로 보장한다"는 엔지니어 서사였습니다. 2026-04-05 plan.md에서 자기 비판이 들어갔습니다.
+
+> *사장님은 데이터 정합성이 아니라 걱정과 수고를 덜어주는 대가로 월 3만원을 낸다.*
+
+엔지니어가 자랑하고 싶은 락·MVCC·Redisson이 아니라 사용자가 돈 낼 이유가 무엇인지 다시 정의했습니다. 이후 모든 기능은 **발주 의사결정 지원**이라는 한 가지 목표에 정렬됐습니다.
 
 ---
 
-## 🎯 Three Procurement-Decision Axes vs. Current State
+## 🎯 발주 의사결정 3축 vs. 현재 코드 상태 (정직한 평가)
 
-| Axis | Use case | Current state | Code reality |
+| 축 | 유스케이스 | 현재 상태 | 코드 진실 |
 |---|---|---|---|
-| Priority | UC-CORE-1 — top 5 inventory at risk | 🟡 **Partial** | `InventoryBatch` FIFO query exists and is used by `StockDeductionService`; the dedicated top-5 endpoint, color-grade response, and depletion-day estimate are not yet implemented |
-| **Price** | UC-CORE-2 — top 5 lowest unit-price | 🟡 **v2 designed** | `pricing/` module: 17 new files; `compileJava` passes; V001 migration SQL written; **integration tests = 0**, V001 not yet applied to dev DB |
-| **Timing** | **UC-CORE-3 — order-timing forecast + alert** | ❌ **Not implemented** | No `PurchaseOrder` entity, no `/orders/forecast` endpoint, no alert dispatcher, no order-day configuration model — zero lines of code yet |
-| (history) | **UC-SUP-8 — purchase-order ledger** | ❌ **Not implemented** | No `PurchaseOrder` entity, no `/purchase-orders` endpoint, no order-confirmation flow |
+| 우선순위 | UC-CORE-1: 재고 임박 Top 5 | 🟡 부분 | InventoryBatch FIFO 쿼리는 있음. 전용 Top 5 API · 등급 색상 · 소진 예상일 계산은 아직 |
+| **가격** | UC-CORE-2: 최저가 Top 5 | 🟡 v2 설계 완료 + 빌드 통과 | `pricing/` 모듈 17 파일, `compileJava` 통과. 통합 테스트 0건, V001 dev DB 미적용 |
+| **타이밍** | **UC-CORE-3: 발주 시점 예측 + 알림** | ❌ **미구현** | `PurchaseOrder` 엔티티 · `/orders/forecast` · 알림 발송 모두 코드 0줄 |
+| (이력) | **UC-SUP-8: 발주 이력 장부** | ❌ **미구현** | `PurchaseOrder` 엔티티 · `/purchase-orders` API 모두 없음 |
 
-> **Implication for portfolio framing.** This project's headline business promise — *helping the owner spend less time on procurement* — depends on UC-CORE-3 + UC-SUP-8, which are still on the roadmap. What is *built* and verifiable today is **the technical substrate that those features will sit on**: concurrency-correct order processing (Pillar 1) and the price-comparison data plane (Pillar 2). Claims like "reduced procurement time" or "saved owners 30 minutes" are not made anywhere in this README and should never appear in any derived portfolio material — they describe a promise the code does not yet keep.
+> **💡 정직한 한 줄.** 이 프로젝트의 헤드라인 약속(*"사장님 발주 시간 절감"*)은 UC-CORE-3 + UC-SUP-8 이 구현되어야 비로소 실현됩니다. 현재 빌드되어 있는 것은 그 위에 올릴 **기술 토대** — 정합성을 보장하는 주문 처리(Pillar 1)와 가격 비교 데이터 평면(Pillar 2) — 뿐입니다. "발주 시간 줄임" · "30분 절약" 같은 운영 결과 표현은 본 README 어디에도 없으며, 어떤 파생 포트폴리오에도 절대 등장하지 않습니다.
 
 ---
 
-## 🛡️ Pillar 1 — Concurrency Control (v1, Verified)
+## 🛡 Pillar 1 — 동시성 제어 (v1, 검증 완료)
 
-The setup. Modern restaurants take orders through three channels at once — delivery apps, in-store table-order tablets, and counter POS. With one steak left at peak time and a 0.1-second gap between two channels firing at the same row, a system without locks oversells the last unit, the kitchen makes a cancellation phone call, and procurement assumptions for the next day are silently wrong (you "sold" something you couldn't make). Procurement decisions can only be trusted if the inventory number they are based on is trusted.
+**상황.** 현대 식당은 배달앱 · 매장 POS · 키오스크 3채널에서 동시에 주문을 받습니다. 마지막 한 접시에 0.1초 간격으로 두 채널이 같은 행을 건드리면, 락 없는 시스템은 마지막 한 개를 두 번 팔고, 주방은 한 명에게 취소 전화를 걸고, 다음날 발주는 "팔린 적 없는 것을 팔린 것"으로 잘못 계산합니다. 발주 결정의 신뢰는 재고 숫자의 신뢰 위에서만 성립합니다.
+
+### 락 전략 4종 + Circuit Breaker 폴백 구조
 
 ```
-LockStrategy (interface)
-  ├─ NONE          (no lock — preserved deliberately to reproduce the failure)
-  ├─ SPIN          (Redis SETNX spin lock)
-  ├─ REDISSON      (Redis distributed lock — production default)
-  └─ PESSIMISTIC   (MySQL SELECT FOR UPDATE)
+LockStrategy (인터페이스)
+  ├─ NONE        — 락 없음 (실패 재현용으로 코드베이스에 의도적으로 보존)
+  ├─ SPIN        — Redis SETNX 스핀 락
+  ├─ REDISSON    — Redisson 분산 락 (프로덕션 기본)
+  └─ PESSIMISTIC — MySQL SELECT FOR UPDATE
 
-LockStrategyHolder ── AtomicReference<LockStrategy>  (runtime-swappable)
-LockStrategyFactory ── LockType enum → strategy implementation
+LockStrategyHolder ── AtomicReference<LockStrategy>  (런타임 교체 가능)
 
-Resilience4j CircuitBreaker — wraps REDISSON
-   ↓ failures cross threshold
-   ↓
-Automatic fallback → PESSIMISTIC (DB-only path keeps the same correctness invariants)
+Resilience4j CircuitBreaker — REDISSON 감싸기
+  ↓ 실패 횟수가 임계치 초과 시
+  ↓
+자동 폴백 → PESSIMISTIC (DB 단독으로 동일한 정합성 보장)
 ```
 
-### Verified Metrics
+### 검증된 수치
 
-Initial inventory 100 g, 500 threads with `CountDownLatch`, each deducts 1 g. Theoretically correct outcome: 100 successes / 400 stock-shortage failures / 0 g remaining.
+**시나리오.** 초기 재고 100g, 500 스레드 × 1g 차감. 이론적 정답: 성공 100건 · 재고부족 실패 400건 · 잔여 0g.
 
-#### Integrity comparison (`ConcurrencyTest`, parameterized on `LockType`)
+#### 정합성 비교 (`ConcurrencyTest`, `LockType` 파라미터)
 
-| Strategy | Successes | Failures | Remaining | Integrity |
+| 전략 | 성공 | 실패 | 잔여 재고 | 정합성 |
 |---|:---:|:---:|:---:|:---:|
-| NONE | 500 | 0 | **10 g** | ❌ broken |
-| SPIN | 100 | 400 | 0 g | ✅ |
-| REDISSON | 100 | 400 | 0 g | ✅ |
-| PESSIMISTIC | 100 | 400 | 0 g | ✅ |
+| NONE | 500 | 0 | **10g** | ❌ 깨짐 |
+| SPIN | 100 | 400 | 0g | ✅ |
+| REDISSON | 100 | 400 | 0g | ✅ |
+| PESSIMISTIC | 100 | 400 | 0g | ✅ |
 
-The `NONE` outcome is **10 g, not −400 g**. Five hundred threads each read `quantity=100`, each writes `99`, and MySQL `REPEATABLE READ`'s Last-Writer-Wins keeps only one of those writes. **The number 10 is the empirical fingerprint of Lost Update** — and the entire reason the `NONE` strategy is preserved rather than deleted.
+**왜 NONE 결과가 0g도 -400g도 아닌 10g인가?** 500개 스레드가 각자 `quantity=100`을 읽고 각자 `99`를 쓰는데, MySQL `REPEATABLE READ`의 Last-Writer-Wins가 그 중 하나만 남깁니다. **10g는 Lost Update의 실측 fingerprint이고, 이게 NONE 전략을 코드베이스에서 삭제하지 않은 이유**입니다. 회귀 검증의 ground truth.
 
-#### Failure-mode comparison (`ChaosTest` — `docker stop redis-test`)
+#### 장애 모드 비교 (`ChaosTest` — `docker stop redis-test`)
 
-| Strategy | Behaviour on Redis outage | Result |
+| 전략 | Redis 장애 시 행동 | 결과 |
 |---|---|:---:|
-| SPIN | `RedisConnectionFailureException` propagates | ❌ outage |
-| REDISSON | 3 failures → CircuitBreaker `OPEN` → automatic fallback to PESSIMISTIC | ✅ uninterrupted |
+| SPIN | `RedisConnectionFailureException` 전파 | ❌ 장애 |
+| REDISSON | 3회 실패 → CircuitBreaker `OPEN` → PESSIMISTIC 자동 폴백 | ✅ 무중단 |
 
-Live trace from `ChaosTest`:
+라이브 trace (`ChaosTest`):
 ```
-[REDISSON] Redis up: order #1 succeeded
+[REDISSON] Redis 정상: 주문 #1 성공
 [REDISSON] docker stop redis-test
-[REDISSON] failure 1/3 → 2/3 → 3/3
+[REDISSON] 실패 1/3 → 2/3 → 3/3
 [REDISSON] CircuitBreaker = OPEN
-[REDISSON] order attempt → fallback to PESSIMISTIC
-[REDISSON] PESSIMISTIC succeeded ✅ — service uninterrupted
+[REDISSON] 주문 시도 → PESSIMISTIC 폴백
+[REDISSON] PESSIMISTIC 성공 ✅ — 서비스 무중단
 ```
 
-CircuitBreaker configuration (production / test):
-- Production: `slidingWindowSize=10`, `failureRateThreshold=50%`, `waitDurationInOpenState=10s`, `permittedNumberOfCallsInHalfOpenState=3`
-- Test profile: `slidingWindowSize=3`, `minimumNumberOfCalls=3`, `waitDurationInOpenState=5s`
+CircuitBreaker 설정:
+- **프로덕션**: `slidingWindowSize=10`, `failureRateThreshold=50%`, `waitDurationInOpenState=10s`, `permittedNumberOfCallsInHalfOpenState=3`
+- **테스트 프로파일**: `slidingWindowSize=3`, `minimumNumberOfCalls=3`, `waitDurationInOpenState=5s`
 
-### Deliberately Excluded Numbers
+### 의도적으로 제외한 수치
 
-This README does **not** claim TPS, P95/P99 latency, or "tens-of-thousands-transaction durability." The codebase has no measurement scripts that would back those numbers, and putting them in here would be fabrication. The integrity result above is the only thing this pillar measures, and it is reproducible from the test suite alone.
+본 README는 **TPS · P95/P99 지연 · "수만 건 트랜잭션 내구성"을 주장하지 않습니다**. 측정 스크립트가 코드에 없어서요. 위 정합성 결과만이 측정 가능하고 테스트 스위트만으로 재현 가능한 자산입니다. 운영 수치는 어떤 파생 포트폴리오에도 등장하지 않습니다.
 
 ---
 
-## 💰 Pillar 2 — Multi-Source Price Integration (v2, Designed)
+## 💰 Pillar 2 — 다중 소스 가격 통합 (v2, 설계 완료)
 
-The procurement decision *"where, at what price, should I buy it"* requires comparable unit prices across heterogeneous sources. The system unifies three:
+발주 결정 *"어디서 얼마에 사야 하나"* 는 이종 소스 간 단위 가격이 비교 가능해야 합니다. 시스템은 **4개 소스**를 통합합니다 (2026-05 EKAPE 추가):
 
 ```
-                 ┌─────────────────────────────────────────────┐
-                 │  KAMIS  (public-market wholesale data)      │
-                 │  Naver Shopping API  (on-demand B2C)        │
-                 │  Sikjajaewang  (B2B vertical, Selenium)     │
-                 └────────────────────┬────────────────────────┘
+                 ┌─────────────────────────────────────────────────┐
+                 │  KAMIS  (공공 도매시장 데이터, XML)               │
+                 │  EKAPE  (축산물 소비자가격 — 2026-05 신규)        │
+                 │  네이버 쇼핑 API  (B2C 일반 쇼핑, on-demand)      │
+                 │  식자재왕  (B2B 도매 — Selenium 크롤러)           │
+                 └────────────────────┬────────────────────────────┘
                                       ▼
-                 ┌─────────────────────────────────────────────┐
-                 │   price_records  (single canonical table)   │
-                 │   UNIQUE (source, raw_product_id,           │
-                 │           DATE(fetched_at))   ← append-only │
-                 │                                             │
-                 │   unit_price_per_kg                         │
-                 │     GENERATED ALWAYS AS                     │
-                 │     (price * 1000 / weight_grams)           │
-                 │     STORED                                  │
-                 │   ← computed by the DB engine,              │
-                 │     materialized, INDEX-able                │
-                 └─────────────────────────────────────────────┘
+                 ┌─────────────────────────────────────────────────┐
+                 │   price_records  (단일 canonical 테이블)        │
+                 │   UNIQUE (source, raw_product_id,               │
+                 │           DATE(fetched_at))   ← append-only     │
+                 │                                                 │
+                 │   unit_price_per_kg                             │
+                 │     GENERATED ALWAYS AS                         │
+                 │     (price * 1000 / weight_grams)               │
+                 │     STORED                                      │
+                 │   ← DB 엔진이 직접 계산 + 디스크 materialize     │
+                 │     → INDEX 가능 + 정합성 contract              │
+                 └─────────────────────────────────────────────────┘
                                       ▼
-                 IngredientMatcher
-                   @Scheduled(fixedDelay = 10 min)  + on-demand fallback
-                 OnlinePriceAggregator
-                   multi-source merge → lowest unit price (ties allowed)
-                 BR2-11 fallback
-                   when all sources empty → return search-URL CTA
+                 IngredientMatcher  @Scheduled(fixedDelay = 10분) + on-demand fallback
+                 OnlinePriceAggregator  다중 소스 머지 → 최저 단위가 (동률 복수 허용)
+                 BR2-11 fallback  전 소스 빈 응답 시 → 검색 URL CTA 노출
 ```
 
-### The B2C / B2B Mismatch That Forced a Source Change
+### B2C / B2B 미스매치 — 소스를 갈아치운 이유
 
-The original v0.3 plan used Coupang and MarketKurly. Both turned out to be B2C-priced — owners actually buy from B2B vertical channels, and the price displayed on a B2C site is misleading. The decision to switch to Naver Shopping (general-purpose) + Sikjajaewang (B2B) wasn't a tooling choice, it was a self-criticism of the original assumption: *we were comparing prices the owner would never pay.* Documented in `plan_park_0423_*` series.
+원래 v0.3 계획은 **쿠팡 + 마켓컬리**였습니다. 둘 다 B2C 가격인데, 사장님은 사실 **B2B 도매 채널**에서 사고 있었습니다. 우리는 사장님이 절대 결제하지 않을 가격을 비교하고 있었던 셈입니다.
 
-### `GENERATED ALWAYS AS ... STORED` — A Real Disagreement Resolved at the DB Layer
+데이터 소스를 **네이버 쇼핑(B2C 일반) + 식자재왕(B2B 도매)**으로 갈아치운 결정은 도구 선택이 아니라 **원래 가정에 대한 자기 비판**이었습니다. (`plan_park_0423_*` 시리즈 기록 참조)
 
-Two valid concerns collided:
+### `GENERATED ALWAYS AS ... STORED` — 팀원 갈등을 DB 계층에서 해결
 
-- *Teammate (sim):* "Storing a derived value (`unit_price_per_kg`) violates normalization and risks divergence from the raw `price` and `weight_grams` it was computed from."
-- *Park:* "I need `unit_price_per_kg` to be **indexable** so the lowest-price-across-sources query stays fast."
+진짜 의견 충돌이 있었습니다:
 
-`GENERATED ALWAYS AS (...) STORED` resolves both at the database layer:
-- The DB engine *guarantees* the derivation — application code cannot produce a divergent value
-- The column is materialized on disk, so `INDEX (unit_price_per_kg)` and `ORDER BY unit_price_per_kg` are cheap
-- The integrity concern is honored by MySQL's contract, not by application discipline
+- **팀원 (sim)**: "파생 값(`unit_price_per_kg`)을 저장하면 정규화 위반 + 원본 `price`·`weight_grams`과 divergence 위험."
+- **park (나)**: "그런데 `unit_price_per_kg`가 **인덱스 가능**해야 across-source 최저가 쿼리가 빠릅니다."
 
-### Domain Precision: Liquid Density Constants
+`GENERATED ALWAYS AS (...) STORED`로 양쪽 우려를 DB 계층에서 동시에 닫았습니다:
 
-Volume-priced staples (soy sauce, fish sauce, cooking oil, sesame oil, milk, honey) skew the unit-price-per-kg calculation by ~20–40% if you naively assume 1 mL = 1 g. A six-entry density table closes that hole:
+- DB 엔진이 derivation을 **보장**합니다. 애플리케이션 코드가 divergent value를 만들 수 없습니다
+- 디스크에 materialize되므로 `INDEX (unit_price_per_kg)` + `ORDER BY unit_price_per_kg`가 빠릅니다
+- 정합성 우려는 MySQL의 contract로 풀리지, 애플리케이션 규율로 풀리지 않습니다
 
-| Ingredient | Density (g/mL) |
+### 도메인 정밀도: 액체 밀도 상수
+
+부피 단위로 팔리는 식재료(간장·액젓·식용유·참기름·우유·꿀)는 "1mL = 1g"으로 가정하면 단위가가 ~20~40% 왜곡됩니다. 6개 상수표로 차단:
+
+| 재료 | 밀도 (g/mL) |
 |---|:---:|
-| Soy sauce (간장) | 1.20 |
-| Fish sauce (액젓) | 1.25 |
-| Cooking oil (식용유) | 0.92 |
-| Sesame oil (참기름) | 0.92 |
-| Milk (우유) | 1.03 |
-| Honey (꿀) | 1.40 |
+| 간장 | 1.20 |
+| 액젓 | 1.25 |
+| 식용유 | 0.92 |
+| 참기름 | 0.92 |
+| 우유 | 1.03 |
+| 꿀 | 1.40 |
 
-This is five minutes of code that prevents an embarrassing demo number — the kind of thing that would make a kitchen owner say "your app says soy sauce is the cheapest, but it isn't."
+5분 코드 작업이지만 시연 신뢰도가 통째로 달려있는 의사결정.
 
-### Honest Status of Pillar 2
+### KAMIS·EKAPE 카테고리별 buy-signal threshold — 6년 실측
 
-```
-✅ compileJava passes
-✅ V001 migration SQL written
-✅ 17 source files in pricing/ module
-❌ V001 has not been applied to the dev DB
-❌ Integration tests have not been written
-❌ Three teammate sign-offs are pending (GENERATED STORED policy,
-                                          raw_product_id NOT NULL,
-                                          10-min matching cadence)
-❌ Sikjajaewang crawler branch not merged
-❌ DB-name unification (sim's `nangjanggoat` vs our `inventory_db`) pending
-```
+가격 신호 임계값을 직감으로 정하지 않고, **KAMIS 6년 (2019~2024) 실측 데이터**의 카테고리별 변동성으로 도출했습니다 (2026-05-04 리캘리브레이션 commit `refactor(pricing): recalibrate KamisCategory thresholds with 6-year KAMIS data`).
 
-In English-portfolio terms: this pillar is **designed and implemented**, not **measured or production-tested**. The portfolio one-liner reflects that distinction.
+| 카테고리 | Threshold | 의미 |
+|---|:---:|---|
+| 채소 | **0.17** | 변동성 높음, 17% 하락 시 buy-signal |
+| 축산물 | **0.08** | 변동성 낮음, 8% 하락 시 buy-signal |
+| 수산물 | **0.07** | 변동성 낮음, 7% 하락 시 buy-signal |
+| 과일 | **0.13** | 중간, 13% 하락 시 buy-signal |
+| 곡물 | **0.05** | 매우 안정, 5% 하락 시 buy-signal |
+| 가공식품 | **0.03** | 가장 안정, 3% 하락 시 buy-signal |
+
+사장님에게 *"지금 사세요"* 를 보여줄 때, **그 신호의 근거가 코드 어디에서 어떻게 나왔는지 추적 가능**해야 한다는 것이 출발점이었습니다.
 
 ---
 
-## 👤 My Role & Responsibilities (capstone team project)
+## 🔔 2026-05 업데이트 (최신 작업)
 
-### Owned (interview-defendable in depth)
+5월 commits로 다음이 반영됐습니다:
 
-#### Pillar 1 — Concurrency
-- `LockStrategy` interface, `LockType` enum, `LockStrategyHolder` (`AtomicReference`-backed runtime swap), `LockStrategyFactory`, four `*LockStrategy` implementations
-- Resilience4j wiring on REDISSON with REDISSON → PESSIMISTIC fallback (production + test profiles)
-- `ConcurrencyTest` (parameterized JUnit 5, 500-thread `CountDownLatch`, three integrity assertions per strategy)
-- `ChaosTest` (Testcontainers `docker stop redis-test`, asserts circuit-OPEN transition)
-- `processOrder` `@Transactional` decomposition — outer transaction removed; `StockDeductionService.deductFifo` carries its own `@Transactional REQUIRED` so the lock can release per thread without holding two HikariCP connections
-
-#### Domain
-- `UnitConverter` — `BigDecimal` with `HALF_UP` rounding, scale 3, full g↔kg / ml↔L matrix; rejects cross-group conversions (e.g. g→ml without density)
-- `InventoryBatch` FIFO model — `expiration_date ASC` ordering, batch-level Pessimistic-lock branching via a `ThreadLocal` `ACTIVE` flag
-- v2.1 entity refresh — `Ingredient`, `InventoryBatch`, `Menu`, `RecipeBom`, `Order`, `OrderItem`, `MarketPrice`; the v1 layer is **deactivated rather than deleted** (Spring annotations stripped, Javadoc-tagged `[v2.1 비활성화]`, `@NoRepositoryBean` on stale repositories) so it can be reactivated with security in V2
-
-#### Pillar 2 — Pricing module (17 files in `pricing/`)
-- `PriceRecord` entity (with the `GENERATED` column annotation contract: `@Column(insertable=false, updatable=false)`)
-- `WeightParser` — single-match regex over package strings, blocks "box/set/mixed" SKUs that would defeat the unit-price calculation
-- `LiquidDensity` — six-entry constants table (above)
-- `IngredientMatcher` — `@Scheduled(fixedDelay = 10 min)` batch + on-demand fallback for cache misses
-- `NaverOnlinePriceProvider` — on-demand external call + 30-minute DB-level cache via `price_records.fetched_at`
-- `OnlinePriceAggregator` — multi-source merge with lowest-unit-price selection (ties preserved)
-- `PriceController` — `/prices/lowest-top`, `/prices/{ingredientId}`
-- `BR2-11` fallback CTA — when all sources return empty for an ingredient, return a search-URL link instead of a blank screen
-
-#### Migration & docs
-- `V001__price_records_extension.sql` — GENERATED column DDL, append-only UNIQUE on `(source, raw_product_id, DATE(fetched_at))`
-- `plan_park_0423_01`, `plan_park_0423_02 (v2)`, `v04_diff_proposal_park_0423`, `plan_park_0426_01`
-
-### Team-led (boundary acknowledged)
-
-- **Sikjajaewang B2B Python crawler** (Selenium + webdriver-manager, 13 categories) — separate branch (`origin/feat/crawler-ewangmart`), teammate-owned. Cross-DB merge into `inventory_db` is pending.
-- **v0.3 → v0.4 use-case document integration** — teammate consolidated the spec; my contribution was the diff proposal and the pricing-side schema agreement.
-
-### Pivots tracked in `plan.md`
-
-The user-centric repositioning (procurement-as-the-pain-point) is documented in [plan.md](plan.md), which lists the Demo / V1 / V2 release scopes. The headline V1 features (KakaoTalk inventory alerts, automatic cost-rate calculation, ordering message helper, simplified inbound entry, sales dashboard) trace one-to-one back to specific interview pain points; status of each is in the roadmap section below.
+| 변경 | 내용 |
+|---|---|
+| **EKAPE 통합** (`feat(ekape)`) | 축산물 소비자가격 일별 수집. KAMIS가 cover 못 하는 축산물 카테고리 보강 |
+| **6년 데이터 리캘리브레이션** (`refactor(pricing)`) | KAMIS threshold를 6년(2019~2024) 실측 기반으로 재도출 |
+| **알림 모듈 개선** (`refactor(alert)`) | Redis SETNX → 인메모리 `ConcurrentHashMap`으로 중복 방지 교체. 단일 인스턴스 환경에서 Redis 의존성 제거 |
+| **재고 단건 입력 API** | 모바일에서 사장님이 한 재료만 빠르게 등록할 수 있는 단순 endpoint |
+| **온보딩 API** | 신규 사용자가 매장 정보 · 재료 카탈로그를 첫 진입 시 입력하는 흐름 |
+| **Docker / CI** | 로컬 개발 환경 표준화 + 기본 CI 단계 추가 |
+| **배치 admin endpoint** | 운영자가 KAMIS 배치를 수동 트리거할 수 있는 관리자 API |
+| **민감값 환경변수 외부화** | `application.properties` 비밀값을 환경변수로 추출 |
+| **레시피 크롤러** (sim, 별도 브랜치) | 식자재왕 레시피 템플릿 크롤러 + 데이터 |
 
 ---
 
-## 🏛️ Architecture
+## 🛠 기술 스택
 
-```
-                           ┌──────────────────────────────┐
-                           │  POS / Delivery App / Kiosk  │
-                           └──────────────┬───────────────┘
-                                          │ X-User-Id (MockAuthFilter — JWT
-                                          │            intentionally disabled
-                                          │            during the v2.1 refactor)
-                                          ▼
-            ┌──────────────────────────────────────────────────────────┐
-            │  Spring Boot 3.5.7 (Java 21)                             │
-            │                                                          │
-            │  ┌─── OrderService.processOrder() (no @Transactional) ──┐│
-            │  │                                                      ││
-            │  │  LockStrategyHolder.get()  →  REDISSON (default)     ││
-            │  │      │ executeWithLock()                              ││
-            │  │      ▼                                                ││
-            │  │  StockDeductionService.deductFifo()                  ││
-            │  │      └─ @Transactional REQUIRED                      ││
-            │  │      └─ FIFO over InventoryBatch (expiration ASC)    ││
-            │  │      └─ BigDecimal + HALF_UP unit normalization      ││
-            │  │                                                      ││
-            │  │  if Circuit Breaker OPEN:                            ││
-            │  │      fallback → PessimisticLockStrategy              ││
-            │  │      └─ SELECT FOR UPDATE                            ││
-            │  └──────────────────────────────────────────────────────┘│
-            │                                                          │
-            │  ┌─── pricing/ module (v2, designed) ──────────────────┐ │
-            │  │  IngredientMatcher  @Scheduled(10 min) + on-demand  │ │
-            │  │  OnlinePriceAggregator  (multi-source merge)        │ │
-            │  │  NaverOnlinePriceProvider  (30-min DB cache)        │ │
-            │  │  PriceController  /prices/lowest-top                │ │
-            │  └─────────────────────────────────────────────────────┘ │
-            │                                                          │
-            │  🚧 UC-CORE-3 (timing) + UC-SUP-8 (history): NOT YET     │
-            └──────────────────┬─────────────────────────┬─────────────┘
-                               │                         │
-                               ▼                         ▼
-            ┌──────────────────────────────┐  ┌────────────────────────┐
-            │  MySQL  inventory_db         │  │  Redis 7               │
-            │  • InventoryBatch (FIFO)     │  │  • Redisson lock       │
-            │  • Ingredient / Menu /       │  │  • SETNX spin lock     │
-            │    RecipeBom                 │  │                        │
-            │  • Order / OrderItem         │  │                        │
-            │  • MarketPrice (KAMIS)       │  │                        │
-            │  • price_records             │  │                        │
-            │      └ unit_price_per_kg     │  │                        │
-            │        GENERATED STORED      │  │                        │
-            └──────────────────────────────┘  └────────────────────────┘
-```
-
-> **The `processOrder` no-`@Transactional` decision** is the most concentrated piece of design in Pillar 1. With 500 threads × `REQUIRES_NEW`, HikariCP enters deadlock because each thread asks for two connections (the outer transaction + the inner deduction transaction). Removing the outer `@Transactional` and letting the inner `StockDeductionService.deductFifo` carry its own short-lived transaction inside the lock — that one change is what makes the entire 500-thread test survive.
+| 영역 | 기술 |
+|---|---|
+| 언어 | Java 21 |
+| 프레임워크 | Spring Boot 3.5.7, Spring Data JPA, Spring Batch, Spring Security *(코드 존재 / 일시 비활성화)* |
+| DB | MySQL 8.0+ (`GENERATED COLUMN STORED`) |
+| 마이그레이션 | Flyway (V001 → V003) |
+| 캐시 · 분산 락 | Redis 7, Redisson 3.23.2 |
+| 신뢰성 | Resilience4j 2.1.0 (CircuitBreaker) |
+| 테스트 | JUnit 5, Testcontainers, CountDownLatch |
+| 외부 API | KAMIS (XML), EKAPE, 네이버 쇼핑 API (JSON) |
+| 외부 크롤러 (별도 브랜치, sim) | Python 3, Selenium, webdriver-manager (식자재왕 13개 카테고리) |
 
 ---
 
-## 🔧 Tech Stack
+## 👤 박건우 역할 (캡스톤 백엔드 리드)
 
-| Layer | Technology | Source-verified at |
+| 영역 | 박건우 담당 | sim 담당 |
 |---|---|---|
-| Language | Java 21 | `build.gradle:13` (`JavaLanguageVersion.of(21)`) |
-| Framework | Spring Boot 3.5.7 | `build.gradle:3` |
-| ORM | Spring Data JPA + Hibernate | `build.gradle:28` |
-| DB | MySQL 8 (`inventory_db`) | `application.properties:7` |
-| **DB GENERATED column** | `STORED` derived `unit_price_per_kg` | `V001__price_records_extension.sql` |
-| Scheduler | `@EnableScheduling` (active) | `InventorySystemApplication.java:7` |
-| In-memory store | Redis (`spring-boot-starter-data-redis`) | `build.gradle:29` |
-| Distributed lock | Redisson 3.23.2 | `build.gradle:43` |
-| Circuit Breaker | Resilience4j 2.1.0 (Spring Boot 3 starter) | `build.gradle:46` |
-| Security | Spring Security + jjwt 0.12.3 (code present, intentionally **disabled** during v2.1 refactor; `MockAuthFilter` parses `X-User-Id` header) | `SecurityConfig.java:28` (`// @Configuration`) |
-| Batch (planned) | Spring Batch (dependencies present, Job/Reader/Writer disabled) | `KamisPriceBatchJobConfig.java:23` |
-| Testing | JUnit 5 + `spring-boot-starter-test` | `build.gradle:37,52` |
-| AOP | `spring-boot-starter-aop` | `build.gradle:47` |
-| External price source #1 | Naver Shopping API (on-demand + 30-min cache via `price_records.fetched_at`) | `NaverOnlinePriceProvider.java` |
-| External price source #2 | Sikjajaewang B2B (Selenium, separate branch) | `crawler/ewangmart/main.py` |
-
-> **Honestly missing.** No `Dockerfile`, no `docker-compose.yml`, no Kubernetes manifests, no Terraform, no CI/CD workflow. This is intentional: the project is a *backend domain* showcase, and the infra showcase lives in a separate portfolio piece.
+| 도메인 룰 코드화 | KAMIS·EKAPE 6년 threshold 도출, 액체 밀도 상수, BR2-11 fallback CTA | — |
+| 동시성 4종 전략 | LockStrategy 인터페이스 + 4구현체 + CircuitBreaker 폴백 | — |
+| 가격 통합 모듈 | `pricing/` 17 파일 1차 구현, `compileJava` 통과, V001~V003 마이그레이션 | — |
+| 의사결정 절충 | `unit_price_per_kg` 갈등 → `GENERATED COLUMN STORED` 합의 | — |
+| 5월 작업 | EKAPE 통합, 6년 리캘리브레이션, 알림 인메모리 교체, 온보딩 API | — |
+| 외부 크롤러 | — | 식자재왕 Python 크롤러, 레시피 템플릿 |
 
 ---
 
-## 🚦 Backend Deep Dives
+## 🗺 로드맵
 
-### 1. Reproducing the Lost-Update Fingerprint
+### 단기 (UC-CORE-3 + UC-SUP-8 — 발주 자동화 핵심 약속 실현)
 
-```
-500 threads each: read quantity → write (quantity − 1)
-                 │
-                 │ no lock                            with lock
-                 ▼                                     ▼
-           Last-Writer-Wins                       serialised access
-                 │                                     │
-                 ▼                                     ▼
-        100 g → 10 g (after 500 races)          100 g → 0 g (after 100 successes)
-```
+- [ ] `PurchaseOrder` 엔티티 + `OrderForecastScheduler` (소진 예상일 + 발주 요일 비교)
+- [ ] `GET /orders/forecast` 알림 후보 endpoint
+- [ ] `POST /purchase-orders` + `/purchase-orders/{id}/confirm` (발주 등록 · 완료)
+- [ ] 알림 채널 (SMS / 앱 푸시)
+- [ ] UC-CORE-1 재고 Top 5 endpoint + 등급 색상 + 소진 예상일 계산
 
-The `NONE` strategy is **deliberately preserved** because reproducing the failure mode is the proof of the entire pillar. The number 10 g is an empirical fingerprint of MySQL `REPEATABLE READ`'s Last-Writer-Wins: 500 threads each read `quantity=100`, each writes `99`, and only some of those writes survive serialization.
+### 중기 (Pillar 2 동작 검증)
 
-### 2. The HikariCP Deadlock Resolution
+- [ ] V001 마이그레이션 dev DB 적용 + 통합 테스트
+- [ ] sim 크롤러 식자재왕 데이터 dev DB 적재 검증
+- [ ] sim · park 두 브랜치 머지 전략 (도메인 충돌 정리)
 
-```
-Before:                                      After:
-processOrder      @Transactional             processOrder      (no transaction)
-  └─ deductFifo   @Transactional REQUIRES_NEW   └─ deductFifo   @Transactional REQUIRED
-        │                                            │
-        ▼                                            ▼
-   thread × 2 conns                              thread × 1 conn
-        │                                            │
-        ▼                                            ▼
-   500 × 2 = 1000 conn  →  pool deadlock         500 × 1 = 500 conn  →  fits, integrity holds
-```
+### 장기
 
-Three rounds of test failures pointed to this. Round 1: integrity held only on `PESSIMISTIC`, the other strategies failed. Round 2: extracting `StockDeductionService` as a separate bean partially helped (transaction-scope isolation). Round 3: removing the *outer* `@Transactional` on `processOrder` was the actual fix. Documented in [`dev_record_0315.md`](dev_record_0315.md).
-
-### 3. Resilience4j as the Right Tool for the Right Job
-
-Most Resilience4j tutorials wrap an HTTP client. Here it wraps the **distributed-lock acquisition** — a deliberate decision because the failure surface that matters in this system is "Redis goes down," not "another microservice times out." The fallback isn't a static error response either; it's a **strategy swap** to the DB-only Pessimistic path that preserves the same correctness invariants. Service stays up; the locking mechanism degrades.
-
-### 4. Why `BigDecimal`, Not `Double`
-
-The unit-conversion matrix (g ↔ kg, ml ↔ L) multiplies by 1000 routinely. `0.1 + 0.2 ≠ 0.3` in IEEE 754; over tens of thousands of inventory deductions that error accumulates and quietly desynchronizes recorded inventory from physical reality. Once the inventory number is wrong, every downstream procurement signal — low-stock alert (UC-CORE-1), depletion-day forecast (UC-CORE-3) — is also wrong. `BigDecimal` with `HALF_UP` rounding at scale 3 is the single point where this entire class of bug is closed off.
-
-### 5. FIFO via `InventoryBatch`
-
-Total-quantity inventory tables can't answer *"which lot of this ingredient should be used first."* `InventoryBatch` represents one inbound shipment, with `expiration_date`, `lot_unit_price`, and quantity. Deduction sorts by `expiration_date ASC` so the closest-to-expiry lot is consumed first. This single design choice unlocks three downstream procurement features at once: D-3 expiration warnings, cost calculation against the actual lot price (not an average), and theoretical-vs-actual variance analysis.
-
-### 6. Pillar 2 — `GENERATED COLUMN STORED` as a Resolution
-
-(See *Pillar 2* section above for the full story.) The compressed version: a teammate's normalization concern and my indexability requirement looked like a tradeoff but weren't — `GENERATED ALWAYS AS (...) STORED` honors both, with the DB engine enforcing derivation correctness while still letting the materialized column be indexed.
+- [ ] Kubernetes 배포
+- [ ] Prometheus / Grafana 운영 모니터링
+- [ ] 발주 이력 누적 → V1 가격 추이 예측 고도화
 
 ---
 
-## 📐 Architecture Decisions (ADRs)
+## 📚 저장소 안 참고 문서
 
-The five load-bearing decisions:
-
-1. **`LockStrategy` interface + runtime swap.** Locks are infrastructure, not business code; they should be replaceable without touching call sites. The strategy pattern also makes the comparison study (one-size-fits-all vs. context-appropriate) literally a parameterized test.
-2. **Pessimistic Lock as the *fallback*, not the primary.** Pessimistic locking has a connection-hold cost; the system pays that cost only when Redis is down, not in the steady state.
-3. **`BigDecimal` over `Double` for all quantity fields.** Catastrophic procurement-decision errors hide in floating-point drift.
-4. **`InventoryBatch` over a single total-quantity column.** FIFO, per-lot cost, and expiration-driven alerts are all untenable without per-shipment rows.
-5. **`GENERATED COLUMN STORED` for `unit_price_per_kg`.** Resolved an integrity-vs-performance disagreement at the DB layer instead of the application layer.
+- `MD/plan_park_*` — 의사결정 흐름 (v0.3 → v0.4 피봇, sim 합의 회신 등)
+- `crawler/ewangmart/` — sim 식자재왕 크롤러 (별도 브랜치)
+- `src/main/resources/db/migration/V001~V003` — Flyway 마이그레이션
+- [README.en.md](README.en.md) — 영문 버전
+- [README_0315.md](README_0315.md) — v1 시점 보존본 (역사적 자료)
 
 ---
 
-## 🚧 Status & Roadmap
+## 🔗 연락처
 
-### Pillar 1 (Concurrency) — verified
+**박건우 ｜ Backend Engineer**
 
-| | Status |
-|---|---|
-| 4 lock strategies | ✅ implemented |
-| `ConcurrencyTest` (500 threads, parameterized) | ✅ passing under all four strategies |
-| `ChaosTest` (`docker stop redis-test`) | ✅ passing |
-| Resilience4j REDISSON → PESSIMISTIC fallback | ✅ wired |
-
-### Pillar 2 (Pricing) — designed, awaiting integration tests + team sign-off
-
-| | Status |
-|---|---|
-| `pricing/` module (17 files) | ✅ `compileJava` passes |
-| V001 SQL migration | ✅ written, ⏳ not yet applied to dev DB |
-| Integration tests | ❌ none yet |
-| Three teammate sign-offs | ⏳ pending (`GENERATED STORED` policy, `raw_product_id NOT NULL`, 10-min matching cadence) |
-| Sikjajaewang crawler branch merge | ⏳ pending |
-| DB-name unification (`nangjanggoat` ↔ `inventory_db`) | ⏳ pending |
-
-### Procurement-decision axes — current vs. planned
-
-| Axis | Use case | Status |
-|---|---|---|
-| Priority | UC-CORE-1 — top 5 inventory at risk | 🟡 partial — FIFO query exists, dedicated endpoint not yet |
-| Price | UC-CORE-2 — top 5 lowest unit-price | 🟡 v2 designed (Pillar 2) |
-| **Timing** | **UC-CORE-3 — order-timing forecast + alert** | ❌ **roadmap** — `PurchaseOrder` entity, `/orders/forecast`, alert dispatcher all unwritten |
-| (history) | **UC-SUP-8 — purchase-order ledger** | ❌ **roadmap** — `PurchaseOrder` entity, `/purchase-orders` endpoints all unwritten |
-
-### Demo / V1 / V2 phases (from `plan.md`)
-
-| Phase | Scope |
-|---|---|
-| **Demo** (front-end pending) | Four `POST` endpoints — `/ingredients`, `/menus`, `/ingredients/{id}/batches`, `/menus/{id}/bom` |
-| **V1** (post-demo) | KakaoTalk inventory alerts · automatic cost-rate calculation · ordering message helper · simplified inbound entry · daily/weekly sales dashboard |
-| **V2** (post-validation) | Receipt OCR auto-inbound · AI ordering suggestions · ROI simulation · JWT re-enabled · nGrinder load testing |
-
-### Honest deferrals (intentional, scope-out)
-
-- Docker / Docker Compose / Kubernetes / Terraform — out of scope for this project; covered by a different portfolio piece
-- CI/CD pipeline — out of scope
-- Production monitoring (Actuator / Micrometer / Prometheus) — V2 scope, currently SLF4J only
-- KAMIS scheduled batch — code present; the scheduler `@Component` annotation is currently disabled and will be restored when the `MarketPrice` entity refresh stabilizes
-
----
-
-## 🚀 Local Development
-
-```bash
-# Redis
-docker run -d --name redis-test -p 6379:6379 redis:7-alpine
-
-# Build & run
-./gradlew bootRun
-
-# Concurrency integrity test (4 strategies, 500 threads)
-./gradlew cleanTest test --tests "*.ConcurrencyTest" --info
-
-# Chaos test (Redis outage → CircuitBreaker fallback)
-./gradlew test --tests "*.ChaosTest" --info
-```
-
-All endpoints currently require the `X-User-Id` header. The production JWT layer is intentionally disabled during the v2.1 refactor; see `MockAuthFilter` and the deactivation log in [`dev_record_0315.md`](dev_record_0315.md).
-
----
-
-## 📚 Reference Documents
-
-- [README_0315.md](README_0315.md) — v1 snapshot with detailed concurrency narrative + interview Q&A
-- [plan.md](plan.md) — User-centric pivot plan (Demo / V1 / V2 phases) with interview-derived pain points
-- [strategy.md](strategy.md) — Initial strategy document (project-identity statement, 4-strategy architecture, AI-suggestion 3-phase approach)
-- [dev_record_0315.md](dev_record_0315.md) — v1 development log including the three-round HikariCP-deadlock debugging
-- [HELP.md](HELP.md) — Spring Boot scaffold help
-
-The `plan_park_*.md` series and `v04_diff_proposal_park_0423.md` are working documents kept in project memory; they capture the four-day compressed progress (2026-04-23 → 2026-04-26) that produced the v2 pricing module.
-
----
-
-## 👤 Author & Team
-
-**Park, Gunwoo (gm-15)** — Backend Lead (capstone team project)
-- Sangmyung University, Software Engineering
+- 이메일: Gunwoo363@gmail.com
 - GitHub: [github.com/gm-15](https://github.com/gm-15)
 - Blog: [velog.io/@gm-15](https://velog.io/@gm-15)
-- Email: gunwoo363@gmail.com
-
-The capstone teammate is responsible for the Sikjajaewang B2B Python crawler (separate branch) and the v0.3 → v0.4 use-case document integration.
