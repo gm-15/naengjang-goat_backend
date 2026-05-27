@@ -1,6 +1,7 @@
 package com.naengjang_goat.inventory_system.user.service;
 
 import com.naengjang_goat.inventory_system.global.jwt.TokenProvider;
+import java.util.NoSuchElementException;
 import com.naengjang_goat.inventory_system.user.domain.Role;
 import com.naengjang_goat.inventory_system.user.dto.TokenResponseDto;
 import com.naengjang_goat.inventory_system.user.dto.UserLoginRequestDto;
@@ -59,6 +60,17 @@ public class UserService {
 
         // 4. DB에 저장
         return userRepository.save(user);
+    }
+
+    /**
+     * FCM 토큰 저장/갱신.
+     * 앱 실행 시 최신 토큰을 서버에 등록해 푸시 알림 수신 유지.
+     */
+    @Transactional
+    public void updateFcmToken(Long userId, String fcmToken) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("사용자 없음: " + userId));
+        user.setFcmToken(fcmToken);
     }
 
     /**

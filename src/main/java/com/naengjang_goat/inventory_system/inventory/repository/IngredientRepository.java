@@ -22,4 +22,7 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
 
     // EKAPE 연동: LIVESTOCK 카테고리 재료 전체 조회
     List<Ingredient> findByKamisCategory(String kamisCategory);
+
+    // KAMIS 배치: item_code 기반 매칭 (이름 변형 대응)
+    Optional<Ingredient> findByKamisItemCode(String kamisItemCode);
 }

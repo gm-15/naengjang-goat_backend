@@ -8,13 +8,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * [v2.1 비활성화]
- * 비활성화 사유: KamisPriceBatchJobConfig 비활성화로 Job 빈 없음
- * 재활성화 조건: KAMIS 배치 복구 시
- * 비활성화 일자: 2026-03-15
+ * KAMIS 일일 배치 스케줄러.
+ * - 매일 03:00 KST 에 KAMIS API 호출 → MarketPrice 적재.
+ * - cron 표현식 (sec min hour day month dow): "0 0 3 * * *" = 03:00:00.
  */
 @Slf4j
-// @Component  // [v2.1 비활성화]
+@Component
 @RequiredArgsConstructor
 public class BatchScheduler {
 

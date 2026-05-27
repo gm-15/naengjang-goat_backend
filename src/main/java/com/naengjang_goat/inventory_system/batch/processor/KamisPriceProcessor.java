@@ -1,43 +1,64 @@
 package com.naengjang_goat.inventory_system.batch.processor;
 
-import com.naengjang_goat.inventory_system.analysis.domain.PriceHistory;
+import com.naengjang_goat.inventory_system.analysis.domain.MarketPrice;
 import com.naengjang_goat.inventory_system.batch.dto.KamisPriceDto;
+import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
+import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 /**
- * [v2.1 비활성화]
- * 비활성화 사유: MarketPriceProcessor로 대체 예정
- * 비활성화 일자: 2026-03-15
+ * KAMIS DTO → MarketPrice 변환.
+ *
+ *  - 매칭 전략: item_code 우선 → 없으면 이름 fallback
+ *    item_code 가 설정된 재료는 KAMIS 품목명 변형(봄배추/고랭지배추 등)에도 안정적으로 매칭.
+ *  - 매칭 실패 시 null 반환 → Spring Batch 가 해당 row 를 자동 skip.
+ *  - retail_price / wholesale_price 는 KAMIS 원본 그대로 String 저장
+ *    (MarketPrice 엔티티가 String 타입 유지 — KAMIS 가 "1,234" 식 콤마 포함 형식).
  */
-// @Component  // [v2.1 비활성화]
+@Component
+@RequiredArgsConstructor
 @Slf4j
-public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, PriceHistory> {
+public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, MarketPrice> {
+
+    private final IngredientRepository ingredientRepository;
 
     @Override
-    public PriceHistory process(KamisPriceDto dto) {
-
+    public MarketPrice process(KamisPriceDto dto) {
         if (dto == null || dto.getProductName() == null) {
             return null;
         }
 
-        PriceHistory entity = new PriceHistory();
+        // 1) item_code 우선 매칭
+        Optional<Ingredient> match = (dto.getItemCode() != null && !dto.getItemCode().isBlank())
+                ? ingredientRepository.findByKamisItemCode(dto.getItemCode())
+                : Optional.empty();
 
-        entity.setPriceDate(LocalDate.now());
-        entity.setProductName(dto.getProductName());
-        entity.setUnit(dto.getUnit());
+        // 2) 코드 매칭 실패 시 이름으로 fallback
+        if (match.isEmpty()) {
+            match = ingredientRepository.findByName(dto.getProductName());
+        }
 
-        entity.setRetailPrice(normalize(dto.getDpr1()));
-        entity.setWholesalePrice(normalize(dto.getDpr4()));
+        if (match.isEmpty()) {
+            log.debug("[KAMIS-PROCESSOR] no match: itemCode='{}' name='{}'",
+                    dto.getItemCode(), dto.getProductName());
+            return null;
+        }
 
-        return entity;
-    }
+        log.debug("[KAMIS-PROCESSOR] matched: itemCode='{}' name='{}' → ingredient='{}'",
+                dto.getItemCode(), dto.getProductName(), match.get().getName());
 
-    private String normalize(String v) {
-        if (v == null || v.isBlank() || "-".equals(v)) return null;
-        return v.replace(",", "").trim();
+        MarketPrice mp = new MarketPrice();
+        mp.setIngredient(match.get());
+        mp.setRetailPrice(dto.getDpr1());
+        mp.setWholesalePrice(dto.getDpr4());
+        mp.setUnit(dto.getUnit());
+        mp.setReportedDate(LocalDate.now().minusDays(1));  // KamisApiClient 의 p_regday 와 일치
+        return mp;
     }
 }

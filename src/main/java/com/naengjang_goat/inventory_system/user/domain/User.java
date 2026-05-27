@@ -30,6 +30,9 @@ public class User {
     private Role role; // 권한 (점주, 직원 등)
     private boolean active = true;
 
+    @Column(name = "fcm_token", length = 255)
+    private String fcmToken; // FCM 기기 토큰 — 앱 실행 시 갱신, 푸시 알림 발송에 사용
+
     public User(String username, String password, String ownerName, Role role) {
         this.username = username;
         this.password = password;

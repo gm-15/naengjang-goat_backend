@@ -40,6 +40,9 @@ public class Ingredient {
     @Column(name = "kamis_category", length = 20)
     private String kamisCategory; // KAMIS 품목 카테고리 (KamisCategory enum name). nullable, 기본 VEGETABLES
 
+    @Column(name = "kamis_item_code", length = 10)
+    private String kamisItemCode; // KAMIS item_code. 설정 시 이름 대신 코드로 매칭 (봄배추/고랭지배추 등 이름 변형 대응)
+
     public Ingredient(User user, String name, String baseUnit, BigDecimal warningThreshold) {
         this.user = user;
         this.name = name;

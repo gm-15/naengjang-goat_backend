@@ -12,10 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * [v2.1 비활성화]
@@ -69,6 +66,19 @@ public class UserController {
             @Valid @RequestBody OnboardRequest request) {
         OnboardResponse response = onboardService.onboard(principal.getId(), request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * PATCH /api/users/fcm-token
+     * 앱 실행 시 FCM 기기 토큰 등록/갱신.
+     * Body: { "token": "FCM_DEVICE_TOKEN" }
+     */
+    @PatchMapping("/fcm-token")
+    public ResponseEntity<Void> updateFcmToken(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @RequestBody java.util.Map<String, String> body) {
+        userService.updateFcmToken(principal.getId(), body.get("token"));
+        return ResponseEntity.noContent().build();
     }
 }
 
