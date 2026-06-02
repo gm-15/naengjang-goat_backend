@@ -3,6 +3,7 @@ package com.naengjang_goat.inventory_system.inventory.controller;
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
 import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
 import com.naengjang_goat.inventory_system.inventory.dto.BatchResponse;
+import com.naengjang_goat.inventory_system.inventory.dto.IngredientCreateRequest;
 import com.naengjang_goat.inventory_system.inventory.dto.IngredientListItemDto;
 import com.naengjang_goat.inventory_system.inventory.dto.LowStockItemDto;
 import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
@@ -11,7 +12,11 @@ import com.naengjang_goat.inventory_system.inventory.service.LowStockService;
 import com.naengjang_goat.inventory_system.pricing.domain.KamisCategory;
 import com.naengjang_goat.inventory_system.pricing.dto.KamisPriceDto;
 import com.naengjang_goat.inventory_system.pricing.service.KamisPriceCalculator;
+import com.naengjang_goat.inventory_system.user.domain.User;
+import com.naengjang_goat.inventory_system.user.repository.UserRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -44,6 +49,7 @@ public class IngredientController {
     private final LowStockService lowStockService;
     private final IngredientRepository ingredientRepository;
     private final KamisPriceCalculator kamisPriceCalculator;
+    private final UserRepository userRepository;
 
     /**
      * GET /ingredients
@@ -85,6 +91,59 @@ public class IngredientController {
                 .supplier(DEFAULT_SUPPLIER_LABEL)
                 .image(ing.getImageUrl())
                 .build();
+    }
+
+    /**
+     * POST /ingredients
+     * 신규 재료 등록 — kim 시안 "+ 재료 추가" 모달.
+     *
+     * 응답: 등록된 재료의 IngredientListItemDto (가격 정보는 KAMIS 시세 없으면 null).
+     * sim, 2026-06-01.
+     */
+    @PostMapping
+    public ResponseEntity<IngredientListItemDto> createIngredient(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @Valid @RequestBody IngredientCreateRequest request
+    ) {
+        User user = userRepository.findById(principal.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자 없음"));
+
+        BigDecimal threshold = request.getWarningThreshold() != null
+                ? request.getWarningThreshold()
+                : BigDecimal.ZERO;
+
+        Ingredient ingredient = new Ingredient(user, request.getName(),
+                request.getBaseUnit(), threshold);
+        ingredient.setKamisCategory(request.getKamisCategory());
+        ingredient.setCategory(request.getCategory());
+        ingredient.setImageUrl(request.getImageUrl());
+
+        Ingredient saved = ingredientRepository.save(ingredient);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toListItem(saved));
+    }
+
+    /**
+     * DELETE /ingredients/{id}
+     * 재료 삭제 — kim 시안 카드 휴지통 아이콘.
+     *
+     * 현재 hard delete. 외래키 의존성 (InventoryBatch·RecipeBom·PurchaseOrder) 이
+     * 있으면 DB 제약 위반. 향후 soft delete (deleted_at) 검토.
+     * sim, 2026-06-01.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteIngredient(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @PathVariable Long id
+    ) {
+        Ingredient ingredient = ingredientRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "재료 없음: " + id));
+
+        if (!ingredient.getUser().getId().equals(principal.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "접근 권한 없음");
+        }
+
+        ingredientRepository.delete(ingredient);
+        return ResponseEntity.noContent().build();
     }
 
     /**
