@@ -1,12 +1,16 @@
 package com.naengjang_goat.inventory_system.inventory.controller;
 
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
+import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
 import com.naengjang_goat.inventory_system.inventory.dto.BatchResponse;
+import com.naengjang_goat.inventory_system.inventory.dto.IngredientListItemDto;
 import com.naengjang_goat.inventory_system.inventory.dto.LowStockItemDto;
 import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
 import com.naengjang_goat.inventory_system.inventory.repository.InventoryBatchRepository;
 import com.naengjang_goat.inventory_system.inventory.service.LowStockService;
 import com.naengjang_goat.inventory_system.pricing.domain.KamisCategory;
+import com.naengjang_goat.inventory_system.pricing.dto.KamisPriceDto;
+import com.naengjang_goat.inventory_system.pricing.service.KamisPriceCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +26,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 /**
  * 재료 재고 배치 조회 컨트롤러 (v2.2 — JWT 인증 복구)
  *
+ * GET /ingredients                   : 점주 재료 목록 (시안 /lowest-price 그리드) ★ sim, 2026-06-01
  * GET /ingredients/{id}/batches      : 재료별 잔여 배치 목록
  * GET /ingredients/low-stock?limit=5 : UC-CORE-1 재고 부족 Top N
  * PATCH /ingredients/{id}/category   : KAMIS 카테고리 설정
@@ -33,9 +38,54 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @RequiredArgsConstructor
 public class IngredientController {
 
+    private static final String DEFAULT_SUPPLIER_LABEL = "KAMIS 공식 시세";
+
     private final InventoryBatchRepository batchRepository;
     private final LowStockService lowStockService;
     private final IngredientRepository ingredientRepository;
+    private final KamisPriceCalculator kamisPriceCalculator;
+
+    /**
+     * GET /ingredients
+     * 점주 재료 전체 목록 — 시안 /lowest-price 그리드.
+     *
+     * 프론트(kim) Ingredient 타입 1:1 매핑. KAMIS 시세 포함.
+     * 가격 출처(supplier) 라벨은 현재 고정 "KAMIS 공식 시세".
+     *
+     * @author sim
+     * @since 2026-06-01
+     */
+    @GetMapping
+    public ResponseEntity<List<IngredientListItemDto>> getIngredients(
+            @AuthenticationPrincipal CustomUserDetails principal
+    ) {
+        List<Ingredient> ingredients = ingredientRepository
+                .findAllByUserIdWithFetch(principal.getId());
+
+        List<IngredientListItemDto> result = ingredients.stream()
+                .map(this::toListItem)
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    private IngredientListItemDto toListItem(Ingredient ing) {
+        KamisPriceDto kamis;
+        try {
+            kamis = kamisPriceCalculator.buildKamis(ing.getId());
+        } catch (RuntimeException e) {
+            kamis = null;
+        }
+        return IngredientListItemDto.builder()
+                .id(ing.getId())
+                .name(ing.getName())
+                .category(ing.getCategory())
+                .unit(ing.getBaseUnit())
+                .price(kamis != null ? kamis.getCurrentPricePerKg() : null)
+                .monthlyAvgPrice(kamis != null ? kamis.getMonthAvg() : null)
+                .supplier(DEFAULT_SUPPLIER_LABEL)
+                .image(ing.getImageUrl())
+                .build();
+    }
 
     /**
      * GET /ingredients/{id}/batches
