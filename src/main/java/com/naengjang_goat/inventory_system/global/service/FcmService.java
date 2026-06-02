@@ -5,22 +5,22 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * FCM 푸시 알림 발송 서비스.
  *
- * FirebaseApp 빈이 null(서비스 계정 파일 없음)이면 발송을 skip.
- * → 개발 환경에서 파일 없이도 앱이 정상 동작.
+ * FirebaseApp 빈이 없거나 null이면 발송을 skip.
+ * → 서비스 계정 파일 없는 개발 환경에서도 앱 정상 기동.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FcmService {
 
-    private final FirebaseApp firebaseApp;
+    @Autowired(required = false)
+    private FirebaseApp firebaseApp;
 
     /**
      * 단일 기기에 푸시 알림 발송.
