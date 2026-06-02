@@ -4,6 +4,12 @@ import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
 import com.naengjang_goat.inventory_system.inventory.domain.InventoryBatch;
 import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
 import com.naengjang_goat.inventory_system.inventory.repository.InventoryBatchRepository;
+import com.naengjang_goat.inventory_system.purchase.domain.PurchaseOrder;
+import com.naengjang_goat.inventory_system.purchase.domain.PurchaseStatus;
+import com.naengjang_goat.inventory_system.purchase.repository.PurchaseOrderRepository;
+import com.naengjang_goat.inventory_system.settings.domain.DayOfWeekType;
+import com.naengjang_goat.inventory_system.settings.domain.StoreSettings;
+import com.naengjang_goat.inventory_system.settings.repository.StoreSettingsRepository;
 import com.naengjang_goat.inventory_system.user.domain.Role;
 import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.repository.UserRepository;
@@ -17,20 +23,24 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 앱 기동 시 데모 시드 데이터 생성.
  *
- * demo 유저가 없을 때만 1회 실행.
+ * demo 유저가 없을 때만 1회 실행 (멱등).
  *
  * 생성 내용:
  *   - 데모 계정: username=demo / password=demo1234 / ownerName=데모점주
+ *   - StoreSettings 1건 (sim, 2026-06-01) — 영업 11:00~22:00, 발주 월요일
  *   - KAMIS item_name 과 1:1 매칭되는 ingredient 19종
  *     (KamisPriceProcessor.findByName() 매칭 대상)
  *   - InventoryBatch 시드 — 각 ingredient 당 1 batch (sim, 2026-06-01)
  *     · 시안 발주 페이지 TOP 5 표현용 (재고율 = currentStock / warningThreshold)
+ *   - PurchaseOrder 3건 (sim, 2026-06-01) — 시안 "마지막 발주" 표시용
+ *     · 닭고기 2026-04-10 / 튀김가루 2026-04-12 / 양파 2026-04-15
  *
  * ※ 프로덕션에서는 이 클래스를 비활성화하거나 @Profile("demo")로 제한 권장
  */
@@ -45,6 +55,8 @@ public class DataInitializer implements ApplicationRunner {
     private final UserRepository userRepository;
     private final IngredientRepository ingredientRepository;
     private final InventoryBatchRepository inventoryBatchRepository;
+    private final StoreSettingsRepository storeSettingsRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 카테고리별 placeholder 이미지 (Unsplash) — sim, 2026-06-01.
@@ -102,23 +114,33 @@ public class DataInitializer implements ApplicationRunner {
 
     private static final BigDecimal SUFFICIENT_FACTOR = new BigDecimal("1.5");
 
+    // 시안 발주 페이지 "마지막 발주" 일자 시드. sim, 2026-06-01.
+    private static final Map<String, LocalDate> SEED_LAST_ORDER = Map.of(
+            "닭고기",   LocalDate.of(2026, 4, 10),  // 시안 카드 1번
+            "튀김가루", LocalDate.of(2026, 4, 12),  // 시안 카드 2번
+            "양파",     LocalDate.of(2026, 4, 15)   // 시안 카드 3번 추정
+    );
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        // 데모 유저 조회 or 생성
+        // 1. 데모 유저 조회 or 생성
         User demo = userRepository.findByUsername(DEMO_USERNAME).orElseGet(() -> {
-            User created = userRepository.save(new User(
+            User c = userRepository.save(new User(
                     DEMO_USERNAME,
                     passwordEncoder.encode(DEMO_PASSWORD),
                     "데모점주",
                     Role.OWNER
             ));
-            log.info("[DataInitializer] 데모 유저 생성 → id={}", created.getId());
-            return created;
+            log.info("[DataInitializer] 데모 유저 생성 → id={}", c.getId());
+            return c;
         });
 
-        // KAMIS/EKAPE 매칭용 ingredient 시드 — 미존재 항목만 생성 (멱등)
-        // sim, 2026-06-01 — 기존 row 에 category/image_url 점진 보충도 처리
+        // 2. StoreSettings 시드 (sim, 2026-06-01)
+        seedStoreSettingsIfMissing(demo);
+
+        // 3. KAMIS/EKAPE 매칭용 ingredient 시드 — 미존재 항목만 생성 (멱등)
+        // sim, 2026-06-01 — 기존 row 에 category/image_url 점진 보충도 처리 + InventoryBatch 시드
         int created = 0;
         int backfilled = 0;
         for (IngredientSeed seed : SEEDS) {
@@ -161,7 +183,30 @@ public class DataInitializer implements ApplicationRunner {
         } else {
             log.info("[DataInitializer] ingredient 시드 모두 이미 존재 — 스킵");
         }
+
+        // 4. PurchaseOrder 시드 (sim, 2026-06-01) — 시안 "마지막 발주" 표시용
+        seedPurchaseOrdersIfMissing(demo);
+
         log.info("[DataInitializer] 로그인 정보 → username={} / password={}", DEMO_USERNAME, DEMO_PASSWORD);
+    }
+
+    /**
+     * StoreSettings 1건 시드 — 영업시간 + 발주/실사 요일.
+     * 이미 있으면 스킵. sim, 2026-06-01.
+     */
+    private void seedStoreSettingsIfMissing(User demo) {
+        if (storeSettingsRepository.findByUserId(demo.getId()).isPresent()) {
+            return;
+        }
+        StoreSettings settings = new StoreSettings(
+                demo,
+                LocalTime.of(11, 0),   // 영업 시작
+                LocalTime.of(22, 0),   // 영업 종료
+                DayOfWeekType.MON,     // 발주 요일 — 매주 월요일
+                DayOfWeekType.SUN      // 재고 실사 — 매주 일요일
+        );
+        storeSettingsRepository.save(settings);
+        log.info("[DataInitializer] StoreSettings 시드 생성 (open=11:00 / close=22:00 / order=MON)");
     }
 
     /**
@@ -185,6 +230,52 @@ public class DataInitializer implements ApplicationRunner {
         InventoryBatch batch = new InventoryBatch(
                 ingredient, quantity, null, inbound, expiration);
         inventoryBatchRepository.save(batch);
+    }
+
+    /**
+     * PurchaseOrder 시드 — 시안 카드의 "마지막 발주" 일자 표시용.
+     * demo user 발주 이력이 1건이라도 있으면 스킵 (사용자 데이터 보호).
+     * sim, 2026-06-01.
+     */
+    private void seedPurchaseOrdersIfMissing(User demo) {
+        if (purchaseOrderRepository.existsByUserId(demo.getId())) {
+            return;
+        }
+        int seeded = 0;
+        for (var entry : SEED_LAST_ORDER.entrySet()) {
+            String name = entry.getKey();
+            LocalDate orderedAt = entry.getValue();
+
+            var ingredientOpt = ingredientRepository
+                    .findByUserIdAndName(demo.getId(), name);
+            if (ingredientOpt.isEmpty()) {
+                continue;
+            }
+            Ingredient ingredient = ingredientOpt.get();
+
+            // 적당한 시연용 수치 — 권장 재고와 동일 수량을 단가 1원 가정으로 시드
+            BigDecimal qty = ingredient.getWarningThreshold();
+            BigDecimal unitPrice = BigDecimal.ONE;
+            BigDecimal total = qty.multiply(unitPrice);
+
+            PurchaseOrder po = PurchaseOrder.builder()
+                    .user(demo)
+                    .ingredient(ingredient)
+                    .orderedAt(orderedAt)
+                    .quantity(qty)
+                    .baseUnit(ingredient.getBaseUnit())
+                    .unitPrice(unitPrice)
+                    .totalAmount(total)
+                    .supplier("데모 거래처")
+                    .memo("DataInitializer 시드")
+                    .status(PurchaseStatus.CONFIRMED)
+                    .build();
+            purchaseOrderRepository.save(po);
+            seeded++;
+        }
+        if (seeded > 0) {
+            log.info("[DataInitializer] PurchaseOrder 시드 {}건 생성", seeded);
+        }
     }
 
     private record IngredientSeed(

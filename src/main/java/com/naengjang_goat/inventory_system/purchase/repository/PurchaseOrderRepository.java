@@ -14,6 +14,12 @@ import java.util.List;
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
 
     /**
+     * 데모 시드 멱등 체크용 — 점주 발주 1건이라도 있으면 true.
+     * sim, 2026-06-01.
+     */
+    boolean existsByUserId(Long userId);
+
+    /**
      * 발주 목록 조회 — 점주 기준, 기간·재료·상태 선택 필터.
      * null 파라미터는 필터 미적용 (전체 포함).
      */
