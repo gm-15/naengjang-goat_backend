@@ -38,6 +38,17 @@ public class OrderItem {
     @Column(name = "unit_price", nullable = false)
     private Integer unitPrice; // 판매 시점 가격 스냅샷
 
+    /**
+     * FIFO 차감된 InventoryBatch 의 id·quantity JSON 직렬화.
+     * 형식: [{"batchId":1,"deductedQuantity":500}, ...]
+     * 주문 취소 시 이 데이터로 batch quantity 복원.
+     *
+     * @author sim
+     * @since 2026-06-04
+     */
+    @Column(name = "deducted_batches", columnDefinition = "TEXT")
+    private String deductedBatches;
+
     public OrderItem(Order order, Menu menu, Integer quantity) {
         this.order = order;
         this.menu = menu;

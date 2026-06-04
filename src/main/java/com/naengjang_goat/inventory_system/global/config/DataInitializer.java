@@ -10,6 +10,8 @@ import com.naengjang_goat.inventory_system.purchase.repository.PurchaseOrderRepo
 import com.naengjang_goat.inventory_system.settings.domain.DayOfWeekType;
 import com.naengjang_goat.inventory_system.settings.domain.StoreSettings;
 import com.naengjang_goat.inventory_system.settings.repository.StoreSettingsRepository;
+import com.naengjang_goat.inventory_system.supplier.domain.Supplier;
+import com.naengjang_goat.inventory_system.supplier.repository.SupplierRepository;
 import com.naengjang_goat.inventory_system.user.domain.Role;
 import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.repository.UserRepository;
@@ -57,6 +59,7 @@ public class DataInitializer implements ApplicationRunner {
     private final InventoryBatchRepository inventoryBatchRepository;
     private final StoreSettingsRepository storeSettingsRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final SupplierRepository supplierRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 카테고리별 placeholder 이미지 (Unsplash) — sim, 2026-06-01.
@@ -139,6 +142,9 @@ public class DataInitializer implements ApplicationRunner {
         // 2. StoreSettings 시드 (sim, 2026-06-01)
         seedStoreSettingsIfMissing(demo);
 
+        // 2-bis. Supplier 시드 (sim, 2026-06-04) — 3개 거래처 데모
+        seedSuppliersIfMissing(demo);
+
         // 3. KAMIS/EKAPE 매칭용 ingredient 시드 — 미존재 항목만 생성 (멱등)
         // sim, 2026-06-01 — 기존 row 에 category/image_url 점진 보충도 처리 + InventoryBatch 시드
         int created = 0;
@@ -188,6 +194,32 @@ public class DataInitializer implements ApplicationRunner {
         seedPurchaseOrdersIfMissing(demo);
 
         log.info("[DataInitializer] 로그인 정보 → username={} / password={}", DEMO_USERNAME, DEMO_PASSWORD);
+    }
+
+    /**
+     * Supplier 3건 시드 — 데모 점주 거래처.
+     * 이미 있으면 스킵. sim, 2026-06-04.
+     */
+    private void seedSuppliersIfMissing(User demo) {
+        if (supplierRepository.existsByUserId(demo.getId())) {
+            return;
+        }
+        supplierRepository.save(new Supplier(
+                demo, "농협유통", "02-1234-5678",
+                "서울특별시 강남구 테헤란로 123",
+                "오전 11시 전 주문 → 당일 배송"
+        ));
+        supplierRepository.save(new Supplier(
+                demo, "식자재마트 김씨", "010-9876-5432",
+                "경기도 용인시 처인구 마평로 45",
+                "주 2회(월/목) 발주, 현금 결제 시 3% 할인"
+        ));
+        supplierRepository.save(new Supplier(
+                demo, "직거래 농장", "010-5555-6666",
+                "충북 음성군 음성읍 농촌길 100",
+                "도매가 협상 가능. 최소 발주량 10kg"
+        ));
+        log.info("[DataInitializer] Supplier 시드 3건 생성");
     }
 
     /**

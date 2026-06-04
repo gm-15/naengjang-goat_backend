@@ -55,4 +55,25 @@ public class OrderController {
     ) {
         return ResponseEntity.ok(orderService.getOrders(principal.getId()));
     }
+
+    /**
+     * POST /orders/{id}/cancel
+     * 주문 취소 + 재고 복구.
+     *
+     * 동작:
+     *  - status 가 COMPLETED 인 주문만 취소 가능
+     *  - OrderItem 별 저장된 deductedBatches JSON 으로 InventoryBatch quantity 복원
+     *  - status 를 CANCELED 로 변경
+     *
+     * @author sim
+     * @since 2026-06-04
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelOrder(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @PathVariable Long id
+    ) {
+        orderService.cancelOrder(principal.getId(), id);
+        return ResponseEntity.noContent().build();
+    }
 }
