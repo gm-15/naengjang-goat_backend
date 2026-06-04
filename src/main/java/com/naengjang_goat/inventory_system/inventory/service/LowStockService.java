@@ -66,7 +66,10 @@ public class LowStockService {
         // 2. 발주일 거리 1회 계산 (동일 userId 이므로 루프 밖에서 처리 — store_settings N+1 방지)
         int nextOrderDayDistance = depletionCalculatorService.calcNextOrderDayDistance(userId);
 
-        // 3. 각 재료 소진 계산 + 4. 정렬 + 5. limit
+        // 3. 각 재료 소진 계산 → enrich (정렬 키 simpleStockRatio 위해 정렬 전 호출)
+        // sim, 2026-06-04 — enrich 를 정렬 전에 이동 + simpleStockRatio fallback 정렬 추가.
+        //   판매 데이터 없을 때 (dailyAvgSales=0) v2 stockRatio=MAX_VALUE 동률 → 시안 의도와
+        //   다르게 가나다 fallback 정렬되던 문제 해소.
         return byId.keySet().stream()
                 .map(id -> {
                     try {
@@ -78,13 +81,26 @@ public class LowStockService {
                     }
                 })
                 .filter(dto -> dto != null)
-                .sorted(Comparator
-                        .comparingDouble(LowStockItemDto::getStockRatio)
-                        .thenComparing(LowStockItemDto::getIngredientName))
-                .limit(limit)
-                // sim, 2026-06-01 — TOP N 만 시안 필드 보강 (전체 ingredient 에 안 함 — 쿼리 절약)
                 .map(dto -> enrichForView(userId, dto, byId))
+                .sorted(Comparator
+                        .comparingDouble(LowStockItemDto::getStockRatio)            // 1순위 v2 stockRatio
+                        .thenComparing(LowStockService::compareBySimpleRatio)        // 2순위 simpleStockRatio (시안 매칭)
+                        .thenComparing(LowStockItemDto::getIngredientName))          // 3순위 이름
+                .limit(limit)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * simpleStockRatio 오름차순 비교 (null 은 최후순위).
+     * sim, 2026-06-04.
+     */
+    private static int compareBySimpleRatio(LowStockItemDto a, LowStockItemDto b) {
+        Double sa = a.getSimpleStockRatio();
+        Double sb = b.getSimpleStockRatio();
+        if (sa == null && sb == null) return 0;
+        if (sa == null) return 1;
+        if (sb == null) return -1;
+        return Double.compare(sa, sb);
     }
 
     /**

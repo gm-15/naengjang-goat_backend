@@ -5,6 +5,7 @@ import com.naengjang_goat.inventory_system.inventory.domain.Ingredient;
 import com.naengjang_goat.inventory_system.inventory.dto.BatchResponse;
 import com.naengjang_goat.inventory_system.inventory.dto.IngredientCreateRequest;
 import com.naengjang_goat.inventory_system.inventory.dto.IngredientListItemDto;
+import com.naengjang_goat.inventory_system.inventory.dto.IngredientUpdateRequest;
 import com.naengjang_goat.inventory_system.inventory.dto.LowStockItemDto;
 import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
 import com.naengjang_goat.inventory_system.inventory.repository.InventoryBatchRepository;
@@ -120,6 +121,54 @@ public class IngredientController {
 
         Ingredient saved = ingredientRepository.save(ingredient);
         return ResponseEntity.status(HttpStatus.CREATED).body(toListItem(saved));
+    }
+
+    /**
+     * PATCH /ingredients/{id}
+     * 재료 부분 수정 — kim 시안 "재료 편집" 모달.
+     *
+     * 본문에 보낸 필드만 수정 (null 은 무시). 이름·단위·권장 재고·카테고리·이미지 등.
+     * KAMIS 카테고리 enum 유효성 검증. KAMIS 카테고리만 바꾸려면 기존
+     * {@link #updateKamisCategory} 도 사용 가능 (호환 유지).
+     *
+     * @author sim
+     * @since 2026-06-04
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<IngredientListItemDto> updateIngredient(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @PathVariable Long id,
+            @RequestBody IngredientUpdateRequest request
+    ) {
+        Ingredient ingredient = ingredientRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "재료 없음: " + id));
+
+        if (!ingredient.getUser().getId().equals(principal.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "접근 권한 없음");
+        }
+
+        // KAMIS 카테고리 enum 유효성 검증 (들어왔을 때만)
+        if (request.getKamisCategory() != null) {
+            try {
+                KamisCategory.valueOf(request.getKamisCategory());
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "유효하지 않은 KAMIS 카테고리. 허용값: "
+                                + java.util.Arrays.toString(KamisCategory.values()));
+            }
+        }
+
+        // null 이 아닌 필드만 갱신
+        if (request.getName() != null)             ingredient.setName(request.getName());
+        if (request.getBaseUnit() != null)         ingredient.setBaseUnit(request.getBaseUnit());
+        if (request.getWarningThreshold() != null) ingredient.setWarningThreshold(request.getWarningThreshold());
+        if (request.getCategory() != null)         ingredient.setCategory(request.getCategory());
+        if (request.getImageUrl() != null)         ingredient.setImageUrl(request.getImageUrl());
+        if (request.getKamisCategory() != null)    ingredient.setKamisCategory(request.getKamisCategory());
+        if (request.getKamisItemCode() != null)    ingredient.setKamisItemCode(request.getKamisItemCode());
+
+        Ingredient saved = ingredientRepository.save(ingredient);
+        return ResponseEntity.ok(toListItem(saved));
     }
 
     /**
