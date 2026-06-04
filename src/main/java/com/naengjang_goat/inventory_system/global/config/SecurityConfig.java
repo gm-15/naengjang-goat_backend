@@ -15,6 +15,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * [v2.1 비활성화]
@@ -31,7 +32,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final UserDetailsServiceImpl userDetailsService;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter; // 우리가 만든 JWT 필터 주입
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CorsConfigurationSource corsConfigurationSource;
 
     /**
      * 비밀번호 암호화를 위한 PasswordEncoder를 Bean으로 등록합니다.
@@ -62,27 +64,22 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. CSRF 보호 비활성화 (JWT를 사용하므로 세션 기반의 CSRF 보호는 필요 없음)
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // 2. 세션 관리 정책 설정: STATELESS (세션을 사용하지 않음)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
-                // 3. HTTP 요청 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        // 인증 없이 접근 허용
                         .requestMatchers("/api/users/signup", "/api/users/login").permitAll()
-                        // Admin 배치 수동 실행 — 개발·운영 편의. 실 배포 시 ROLE_ADMIN 조건 추가 가능
                         .requestMatchers("/admin/**").permitAll()
-                        // 그 외의 모든 요청은 반드시 인증(로그인)을 거쳐야 함
+                        // Swagger UI
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
-
-                // [핵심] 4. 우리가 만든 JwtAuthenticationFilter를
-                //            Spring Security의 기본 로그인 필터(UsernamePasswordAuthenticationFilter)보다
-                //            한 단계 먼저 실행되도록 '배치'합니다.
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
