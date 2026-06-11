@@ -93,6 +93,8 @@ public class KamisApiClient {
     /**
      * 지정 날짜 기준 6개 카테고리 수집.
      * 0건이면 공휴일로 간주하고 빈 리스트 반환 (호출자가 날짜 변경 후 재시도).
+     *
+     * sim, 2026-06-05 — 각 dto 에 reportedDate(date) set 추가 (30일 backfill 지원).
      */
     private List<KamisPriceDto> fetchForDate(LocalDate date) {
         String regday = date.format(KAMIS_DATE_FMT);
@@ -102,6 +104,7 @@ public class KamisApiClient {
             if (xml == null || xml.isBlank()) continue;
             try {
                 List<KamisPriceDto> parsed = parseXml(xml);
+                parsed.forEach(dto -> dto.setReportedDate(date));
                 log.info("[KAMIS-API] {} category={} parsed={}", regday, cat, parsed.size());
                 all.addAll(parsed);
             } catch (Exception e) {
@@ -112,33 +115,39 @@ public class KamisApiClient {
     }
 
     /**
-     * 모든 카테고리 합쳐서 DTO 리스트로 반환. Reader 가 사용.
+     * 모든 카테고리 × 최근 N 평일 합쳐서 DTO 리스트로 반환. Reader 가 사용.
      *
-     * 날짜 결정 전략:
-     *   1) 어제부터 시작, 주말은 스킵
-     *   2) 0건이면 공휴일로 간주 → 하루 더 뒤로 (최대 10일)
-     *   → 연휴 직후에도 가장 최근 데이터를 자동으로 수집
+     * sim, 2026-06-05 — kim 인수인계서 5-3 섹션 해결.
+     *   기존: 어제 1일치만 (가장 최근 데이터 1포인트)
+     *   변경: 어제부터 최대 BACKFILL_DAYS 일치 backfill
+     *         → /prices/{id}/trend 차트가 30일 가격 추이 응답 가능
+     *
+     * 중복 적재는 Writer 에서 (ingredient_id + reported_date + source) 기준 skip.
      */
+    private static final int BACKFILL_DAYS = 30;
+
     public List<KamisPriceDto> fetchAllCategories() {
-        LocalDate candidate = prevWeekday(LocalDate.now().minusDays(1));
+        LocalDate today = LocalDate.now();
+        List<KamisPriceDto> all = new ArrayList<>();
+        int collectedDays = 0;
 
-        for (int attempt = 1; attempt <= 10; attempt++) {
-            log.info("[KAMIS-API] 조회 기준일: {} ({}) [{}회차]",
-                    candidate.format(KAMIS_DATE_FMT), candidate.getDayOfWeek(), attempt);
+        for (int daysAgo = 1; daysAgo <= BACKFILL_DAYS * 2 && collectedDays < BACKFILL_DAYS; daysAgo++) {
+            LocalDate candidate = prevWeekday(today.minusDays(daysAgo));
+            List<KamisPriceDto> daily = fetchForDate(candidate);
 
-            List<KamisPriceDto> result = fetchForDate(candidate);
-
-            if (!result.isEmpty()) {
-                log.info("[KAMIS-API] total parsed: {} ({})", result.size(), candidate.format(KAMIS_DATE_FMT));
-                return result;
+            if (daily.isEmpty()) {
+                log.debug("[KAMIS-API] {} 데이터 없음 (공휴일/미게시) — skip", candidate.format(KAMIS_DATE_FMT));
+                continue;
             }
 
-            log.info("[KAMIS-API] {} 데이터 없음 (공휴일/미게시) → 이전 평일 재시도", candidate.format(KAMIS_DATE_FMT));
-            candidate = prevWeekday(candidate.minusDays(1));
+            log.info("[KAMIS-API] {} 적재 대상 {}건 (누적 {}일)",
+                    candidate.format(KAMIS_DATE_FMT), daily.size(), collectedDays + 1);
+            all.addAll(daily);
+            collectedDays++;
         }
 
-        log.warn("[KAMIS-API] 10일 이내 데이터 없음 — 빈 리스트 반환");
-        return List.of();
+        log.info("[KAMIS-API] backfill 완료 — total {}건 ({}일치)", all.size(), collectedDays);
+        return all;
     }
 
     /** @deprecated 단일 카테고리만 받던 옛 메서드. fetchAllCategories() 사용 권장. */

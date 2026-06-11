@@ -58,7 +58,10 @@ public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, MarketP
         mp.setRetailPrice(dto.getDpr1());
         mp.setWholesalePrice(dto.getDpr4());
         mp.setUnit(dto.getUnit());
-        mp.setReportedDate(LocalDate.now().minusDays(1));  // KamisApiClient 의 p_regday 와 일치
+        // sim, 2026-06-05 — 30일 backfill 지원: dto 의 reportedDate 우선, 없으면 어제로 fallback
+        mp.setReportedDate(dto.getReportedDate() != null
+                ? dto.getReportedDate()
+                : LocalDate.now().minusDays(1));
         return mp;
     }
 }
