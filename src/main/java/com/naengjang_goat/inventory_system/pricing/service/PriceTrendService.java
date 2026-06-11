@@ -35,6 +35,9 @@ public class PriceTrendService {
 
     private final MarketPriceRepository marketPriceRepository;
     private final IngredientRepository ingredientRepository;
+    // sim, 2026-06-05 — 가격 정규화 (원/kg) 위해 KamisPriceCalculator 활용.
+    //   priceHistory.price 와 kamisPrice 가 동일 기준이 되도록 통일.
+    private final KamisPriceCalculator kamisPriceCalculator;
 
     private static final int WEEK_WINDOW = 7;
     private static final int MONTH_WINDOW = 30;
@@ -83,8 +86,9 @@ public class PriceTrendService {
         List<TrendPointDto> points = new ArrayList<>();
         for (int i = startIdx; i < totalSize; i++) {
             MarketPrice mp = sorted.get(i);
-            Long wholesale = parsePrice(mp.getWholesalePrice());
-            Long retail = parsePrice(mp.getRetailPrice());
+            // sim, 2026-06-05 — 단위 정규화 (원/kg) 적용. 박스 단위 그대로 노출되던 버그 해결.
+            Long wholesale = kamisPriceCalculator.toPricePerKg(mp.getWholesalePrice(), mp.getUnit());
+            Long retail = kamisPriceCalculator.toPricePerKg(mp.getRetailPrice(), mp.getUnit());
             Long current = wholesale != null ? wholesale : retail;
 
             Long weekAvg = slidingAverage(priceSeries, i, WEEK_WINDOW);
@@ -123,8 +127,9 @@ public class PriceTrendService {
     // ─── private helpers ────────────────────────────────────────────────────
 
     private Long resolvePrice(MarketPrice mp) {
-        Long w = parsePrice(mp.getWholesalePrice());
-        return w != null ? w : parsePrice(mp.getRetailPrice());
+        // sim, 2026-06-05 — 단위 정규화 (원/kg) 적용 — KamisPriceCalculator 와 동일 기준.
+        Long w = kamisPriceCalculator.toPricePerKg(mp.getWholesalePrice(), mp.getUnit());
+        return w != null ? w : kamisPriceCalculator.toPricePerKg(mp.getRetailPrice(), mp.getUnit());
     }
 
     /**
