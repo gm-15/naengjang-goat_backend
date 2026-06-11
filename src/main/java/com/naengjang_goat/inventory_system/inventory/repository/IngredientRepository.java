@@ -20,6 +20,13 @@ public interface IngredientRepository extends JpaRepository<Ingredient, Long> {
     // 이름으로 단건 조회
     Optional<Ingredient> findByName(String name);
 
+    /**
+     * 동일 이름 ingredient 전체 user 조회.
+     * KAMIS 시세를 모든 사용자 ingredient 에 매핑하기 위함.
+     * sim, 2026-06-05 — kim 인수인계서 5-2 섹션 영구 해결.
+     */
+    List<Ingredient> findAllByName(String name);
+
     // EKAPE 연동: LIVESTOCK 카테고리 재료 전체 조회
     List<Ingredient> findByKamisCategory(String kamisCategory);
 
