@@ -46,7 +46,9 @@ public class KamisApiClient {
     private static final String[] CATEGORY_CODES =
             { "100", "200", "300", "400", "500", "600" };
 
-    private static final DateTimeFormatter KAMIS_DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    // KAMIS 는 dash 포맷만 응답. yyyy/MM/dd 로는 빈 응답 (HTTP 000) 발생.
+    // sim, 2026-06-05 — kim 인수인계서 4섹션 버그 패치.
+    private static final DateTimeFormatter KAMIS_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     /** 주말 건너뛴 가장 최근 평일. 공휴일 판단은 API 응답에 위임. */
     private static LocalDate prevWeekday(LocalDate from) {
         LocalDate d = from;
@@ -66,9 +68,14 @@ public class KamisApiClient {
                     "&p_cert_key=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
                     "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
                     "&p_returntype=" + URLEncoder.encode(returnType, StandardCharsets.UTF_8) +
-                    "&p_product_cls_code=01" +
-                    "&p_category_code=" + categoryCode +
-                    "&p_regday=" + regday;
+                    // sim, 2026-06-05 — kim 인수인계서 4섹션 패치:
+                    //   · p_product_cls_code: 01(소매) → 02(도매). 01 은 KAMIS 가 빈 응답
+                    //   · p_category_code → p_item_category_code 공식 파라미터명
+                    //   · p_convert_kg_yn=Y 추가 — 박스/포기 단위 → kg 환산
+                    "&p_product_cls_code=02" +
+                    "&p_item_category_code=" + categoryCode +
+                    "&p_regday=" + regday +
+                    "&p_convert_kg_yn=Y";
 
             return restTemplate.getForObject(url, String.class);
         } catch (Exception e) {
