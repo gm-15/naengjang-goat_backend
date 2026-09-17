@@ -9,6 +9,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -27,6 +28,10 @@ import org.springframework.stereotype.Component;
  *  4. 한쪽 실패해도 다른 쪽은 계속 진행 (try/catch 분리)
  *  5. 중복 적재는 Writer 의 source 기준 skip 으로 자동 처리
  *
+ * park, 2026-09-17 — kamis.auto-trigger.enabled=true 일 때만 동작 (기본 off).
+ *   KAMIS 30평일 × 6카테고리 backfill 로 부팅마다 API 약 180회를 호출한다.
+ *   개발 중 DevTools 재시작마다 반복되지 않도록, 시연 때만 KAMIS_AUTO_TRIGGER=true 로 켠다.
+ *
  * @author sim
  * @since 2026-06-05
  */
@@ -34,6 +39,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Profile("!test")
+@ConditionalOnProperty(name = "kamis.auto-trigger.enabled", havingValue = "true")
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class BatchAutoTrigger implements ApplicationRunner {
 
