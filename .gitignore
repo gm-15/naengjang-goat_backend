@@ -48,3 +48,5 @@ crawler/**/.env
 ### Firebase Admin SDK 시크릿 키 (절대 푸시 금지) — sim, 2026-06-01 ###
 src/main/resources/firebase-service-account.json
 firebase-service-account*.json
+# 콘솔에서 받은 원본 파일명 (예: naengjanggoat-firebase-adminsdk-fbsvc-xxxx.json) — park, 2026-09-17
+*firebase-adminsdk*.json
