@@ -43,6 +43,25 @@ public class Ingredient {
     @Column(name = "kamis_item_code", length = 10)
     private String kamisItemCode; // KAMIS item_code. 설정 시 이름 대신 코드로 매칭 (봄배추/고랭지배추 등 이름 변형 대응)
 
+    /**
+     * UI 노출용 카테고리 라벨 — "육류"|"채소"|"소스/양념"|"유제품"|"기타".
+     * 프론트 {@code IngredientCategory} 와 1:1 매핑.
+     * kamisCategory(KAMIS 분류)와는 별도. nullable.
+     *
+     * @since 2026-06-01 (sim, /prices/{id} 프론트 연동)
+     */
+    @Column(name = "category", length = 20)
+    private String category;
+
+    /**
+     * 재료 대표 이미지 URL (시안 /lowest-price/{id} 상단 이미지).
+     * 외부 CDN 또는 우리 정적 자산. nullable.
+     *
+     * @since 2026-06-01 (sim, /prices/{id} 프론트 연동)
+     */
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl;
+
     public Ingredient(User user, String name, String baseUnit, BigDecimal warningThreshold) {
         this.user = user;
         this.name = name;

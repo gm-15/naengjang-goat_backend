@@ -2,7 +2,7 @@ package com.naengjang_goat.inventory_system.pricing.controller;
 
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
 import com.naengjang_goat.inventory_system.pricing.dto.LowestTopItemDto;
-import com.naengjang_goat.inventory_system.pricing.dto.PriceDetailDto;
+import com.naengjang_goat.inventory_system.pricing.dto.PriceDetailViewDto;
 import com.naengjang_goat.inventory_system.pricing.dto.PriceTrendResponse;
 import com.naengjang_goat.inventory_system.pricing.service.LowestTopService;
 import com.naengjang_goat.inventory_system.pricing.service.PriceDetailService;
@@ -21,7 +21,8 @@ import java.util.List;
  *
  * Endpoints:
  *  - GET /prices/lowest-top?limit=5          : 사장님 등록 재료 중 KAMIS 하락률 Top N
- *  - GET /prices/{ingredientId}              : 재료 상세 (KAMIS + 네이버 + 식자재왕)
+ *  - GET /prices/{ingredientId}              : 재료 상세 (KAMIS + 네이버 + 식자재왕 + 30일 추이)
+ *                                              v3 응답: PriceDetailViewDto (kim ProductData 1:1)
  *  - GET /prices/{ingredientId}/trend?days=30 : 가격 추이 시계열 + buySignal (UC-CORE-3)
  */
 @RestController
@@ -41,7 +42,7 @@ public class PriceController {
     }
 
     @GetMapping("/{ingredientId}")
-    public ResponseEntity<PriceDetailDto> detail(
+    public ResponseEntity<PriceDetailViewDto> detail(
             @AuthenticationPrincipal CustomUserDetails principal,
             @PathVariable Long ingredientId) {
         return ResponseEntity.ok(priceDetailService.getDetail(principal.getId(), ingredientId));

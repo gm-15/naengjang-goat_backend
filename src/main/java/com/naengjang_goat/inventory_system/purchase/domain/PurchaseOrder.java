@@ -58,6 +58,15 @@ public class PurchaseOrder {
     @Column(nullable = false, length = 100)
     private String supplier;
 
+    /**
+     * Supplier 도메인 연결 — 신규 발주는 이 필드 사용 권장.
+     * 기존 {@code supplier} String 은 호환을 위해 유지.
+     * @author sim
+     * @since 2026-06-04
+     */
+    @Column(name = "supplier_id")
+    private Long supplierId;
+
     @Column(columnDefinition = "TEXT")
     private String memo;
 

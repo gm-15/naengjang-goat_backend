@@ -22,7 +22,7 @@ import java.time.LocalDate;
  *   stockRatio = Double.MAX_VALUE → 정렬 최후순위, 알림 없음
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class LowStockItemDto {
 
     private Long ingredientId;
@@ -36,7 +36,24 @@ public class LowStockItemDto {
     private LocalDate estimatedDepletionDate; // 소진 예정일 (null = 판매 데이터 없음)
     private boolean orderAlert;              // grade==DANGER AND depletionDate < nextOrderDayDate
 
-    /** DepletionResult → LowStockItemDto 변환 */
+    // ─── sim, 2026-06-01 — 시안 발주 페이지 카드 매핑 추가 필드 ─────────────────
+    /** UI 카테고리 라벨 — "육류"|"채소"|"소스/양념"|"유제품"|"기타" (nullable) */
+    private String category;
+    /** 대표 이미지 URL (nullable) */
+    private String image;
+    /** 권장 재고량 — Ingredient.warningThreshold. 시안 "권장: 50kg" */
+    private BigDecimal warningThreshold;
+    /**
+     * 시안 친화 재고율 = currentStock / warningThreshold (0.0~1.0+).
+     * v2 stockRatio (현재/예상소비) 와 다른 의미 — 시안 카드 "재고율 10%" 라벨용.
+     * warningThreshold 가 0 이거나 null 이면 null.
+     */
+    private Double simpleStockRatio;
+    /** 가장 최근 발주 일자 (PurchaseOrder.orderedAt MAX). 없으면 null. 시안 "마지막 발주" */
+    private LocalDate lastOrderedAt;
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** DepletionResult → LowStockItemDto 변환 (기존 호환). 시안 필드는 호출처에서 채움. */
     public static LowStockItemDto from(DepletionResult r) {
         return LowStockItemDto.builder()
                 .ingredientId(r.getIngredientId())

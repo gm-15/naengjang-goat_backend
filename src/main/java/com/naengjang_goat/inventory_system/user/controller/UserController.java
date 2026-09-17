@@ -80,5 +80,20 @@ public class UserController {
         userService.updateFcmToken(principal.getId(), body.get("token"));
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * POST /api/users/logout
+     *
+     * 현재 JWT 는 stateless — 서버 측 토큰 무효화 안 함.
+     * 클라이언트가 access/refresh 토큰 폐기하면 됨.
+     * 향후 보강: Redis 블랙리스트 (token jti 기준 5분 TTL 만료까지 거부).
+     *
+     * @author sim
+     * @since 2026-06-01
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        return ResponseEntity.noContent().build();
+    }
 }
 
