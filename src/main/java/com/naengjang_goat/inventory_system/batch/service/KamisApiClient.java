@@ -18,7 +18,9 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -69,7 +71,8 @@ public class KamisApiClient {
                     "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
                     "&p_returntype=" + URLEncoder.encode(returnType, StandardCharsets.UTF_8) +
                     // sim, 2026-06-05 — kim 인수인계서 4섹션 패치:
-                    //   · p_product_cls_code: 01(소매) → 02(도매). 01 은 KAMIS 가 빈 응답
+                    //   · p_product_cls_code: 01(소매) → 02(도매). 발주 판단은 도매가 기준
+                    //     (park, 2026-09-17 정정 — 01 도 정상 응답함. 다만 소매는 배추 '1포기' 처럼 kg 환산 불가 단위)
                     //   · p_category_code → p_item_category_code 공식 파라미터명
                     //   · p_convert_kg_yn=Y 추가 — 박스/포기 단위 → kg 환산
                     "&p_product_cls_code=02" +
@@ -103,7 +106,7 @@ public class KamisApiClient {
             String xml = fetchXml(cat, regday);
             if (xml == null || xml.isBlank()) continue;
             try {
-                List<KamisPriceDto> parsed = parseXml(xml);
+                List<KamisPriceDto> parsed = pickRepresentativeRows(parseXml(xml));
                 parsed.forEach(dto -> dto.setReportedDate(date));
                 log.info("[KAMIS-API] {} category={} parsed={}", regday, cat, parsed.size());
                 all.addAll(parsed);
@@ -170,6 +173,27 @@ public class KamisApiClient {
         }
     }
 
+    /**
+     * 품목당 대표 행 1개만 남긴다. (park, 2026-09-17)
+     *
+     * KAMIS 는 같은 품목을 품종·등급별로 여러 행 반환한다 (예: 배추 상품/중품).
+     * 가격이 있는 행 중 '상품' 등급을 우선하고, 없으면 응답 순서상 첫 행을 쓴다.
+     * 소 1++등급·돼지 부위명·수산 大/中·과일 L과·수입품 중품 등 '상품' 이 없는 조합이
+     * 46개라, '상품' 만 거르면 축산·수산 대부분이 누락된다 (2026-09-16 전 카테고리 실측).
+     */
+    private List<KamisPriceDto> pickRepresentativeRows(List<KamisPriceDto> rows) {
+        Map<String, KamisPriceDto> picked = new LinkedHashMap<>();
+        for (KamisPriceDto dto : rows) {
+            if (dto.getDpr1() == null) continue;
+            String key = isBlank(dto.getItemCode()) ? dto.getProductName() : dto.getItemCode();
+            KamisPriceDto current = picked.get(key);
+            if (current == null || (!"상품".equals(current.getRank()) && "상품".equals(dto.getRank()))) {
+                picked.put(key, dto);
+            }
+        }
+        return new ArrayList<>(picked.values());
+    }
+
     private List<KamisPriceDto> parseXml(String xml) throws Exception {
         List<KamisPriceDto> list = new ArrayList<>();
 
@@ -196,8 +220,8 @@ public class KamisApiClient {
             dto.setItemCode(getTagText(e, "item_code"));
             dto.setProductName(getTagText(e, "item_name"));
             dto.setUnit(getTagText(e, "unit"));
+            dto.setRank(getTagText(e, "rank"));
             dto.setDpr1(normalize(getTagText(e, "dpr1")));
-            dto.setDpr4(normalize(getTagText(e, "dpr4")));
 
             if (isBlank(dto.getProductName())) continue;
 
