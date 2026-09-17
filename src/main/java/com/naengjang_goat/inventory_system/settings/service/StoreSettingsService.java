@@ -48,15 +48,4 @@ public class StoreSettingsService {
 
         return StoreSettingsResponse.from(settingsRepository.save(settings));
     }
-
-    /**
-     * 다른 서비스(DailySalesService 등)에서 설정을 직접 조회할 때 사용.
-     * 설정 미완료 시 IllegalStateException — 호출 전 설정 여부 확인 권장.
-     */
-    @Transactional(readOnly = true)
-    public StoreSettings getSettingsOrThrow(Long userId) {
-        return settingsRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "영업 설정이 완료되지 않았습니다. PUT /settings 를 먼저 호출하세요. userId=" + userId));
-    }
 }

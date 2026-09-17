@@ -5,11 +5,12 @@ import com.naengjang_goat.inventory_system.inventory.domain.StockGrade;
 import com.naengjang_goat.inventory_system.inventory.dto.DepletionResult;
 import com.naengjang_goat.inventory_system.inventory.repository.IngredientRepository;
 import com.naengjang_goat.inventory_system.inventory.repository.InventoryBatchRepository;
-import com.naengjang_goat.inventory_system.settings.domain.StoreSettings;
+import com.naengjang_goat.inventory_system.settings.dto.StoreSettingsResponse;
 import com.naengjang_goat.inventory_system.settings.service.StoreSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -53,8 +54,12 @@ public class DepletionCalculatorService {
     /**
      * nextOrderDayDistance 를 외부에서 미리 계산해서 넘기는 오버로드.
      * LowStockService 배치 처리처럼 동일 userId 로 N번 호출할 때 DB 조회를 1회로 줄임.
+     *
+     * REQUIRES_NEW (park, 2026-09-17): LowStockService 는 재료 하나가 실패하면 catch 하고 건너뛴다.
+     * 그런데 호출자 트랜잭션에 참여하면 여기서 난 예외가 그 트랜잭션을 rollback-only 로 만들어,
+     * 커밋 시점에 UnexpectedRollbackException 으로 목록 전체가 실패했다. 재료마다 트랜잭션을 분리한다.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public DepletionResult calculate(Long userId, Long ingredientId, int nextOrderDayDistance) {
 
         // 1. 재료 기본 정보
@@ -117,16 +122,16 @@ public class DepletionCalculatorService {
      * StoreSettings 미설정 시 기본값 7일 반환.
      */
     public int calcNextOrderDayDistance(Long userId) {
-        StoreSettings settings;
-        try {
-            settings = settingsService.getSettingsOrThrow(userId);
-        } catch (IllegalStateException e) {
+        // park, 2026-09-17 — 미설정을 예외로 받아 catch 하던 방식은 호출자 트랜잭션을 rollback-only 로 만들어
+        //   신규 점주의 GET /ingredients/low-stock 이 500 이 됐다. 예외 없이 설정 여부를 확인한다.
+        StoreSettingsResponse settings = settingsService.getSettings(userId);
+        if (!settings.configured()) {
             log.warn("[DepletionCalculator] StoreSettings 미설정 userId={} → 기본값 7일", userId);
             return 7;
         }
 
         DayOfWeek today     = LocalDate.now().getDayOfWeek();
-        DayOfWeek orderDay  = settings.getOrderDay().toJavaDayOfWeek();
+        DayOfWeek orderDay  = settings.orderDay().toJavaDayOfWeek();
 
         int diff = orderDay.getValue() - today.getValue();
         if (diff <= 0) diff += 7; // 이미 지났거나 오늘이면 다음 주로
