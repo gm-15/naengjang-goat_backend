@@ -1,5 +1,6 @@
 package com.naengjang_goat.inventory_system.pricing.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,9 +19,12 @@ public class OnlinePriceDto {
     private final String imageUrl;
     private final Integer price;
     private final String currency;
+    // Lombok getter 가 isDiscount() 라 Jackson 은 "discount" 로 내보낸다. 프론트 키(isDiscount)에 맞춰 getter 에 고정 (park, 2026-09-17)
+    @Getter(onMethod_ = @JsonProperty("isDiscount"))
     private final boolean isDiscount;
     private final Integer weightGrams;
     private final Long unitPricePerKg;
+    @Getter(onMethod_ = @JsonProperty("isLowest"))
     private final boolean isLowest;
     private final LocalDateTime fetchedAt;
 }
