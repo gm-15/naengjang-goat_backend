@@ -2,16 +2,20 @@ package com.naengjang_goat.inventory_system.batch.ekape;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.StringReader;
+import java.io.ByteArrayInputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -172,9 +176,9 @@ public class EkapeApiClient {
     /** 단일 날짜 API 호출 → 평균가격 반환. null = 데이터 없음/오류. */
     private Integer fetchSingleDay(EkapeProduct product, LocalDate date) {
         String url = buildUrl(product, date);
-        String xml = fetchXml(url);
-        if (xml == null) return null;
-        return parseAveragePrice(xml, product);
+        byte[] xmlBytes = fetchXml(url);
+        if (xmlBytes == null) return null;
+        return parseAveragePrice(xmlBytes, product);
     }
 
     private String buildUrl(EkapeProduct product, LocalDate date) {
@@ -188,14 +192,30 @@ public class EkapeApiClient {
         return sb.toString();
     }
 
-    private String fetchXml(String url) {
+    /**
+     * 응답을 byte[] 로 받는다. 명시적 헤더로:
+     *   - Accept: application/xml           (서버가 XML 응답 확정)
+     *   - Accept-Encoding: identity          (gzip/deflate 비활성 — RestTemplate 기본 gzip 광고 시
+     *                                        서버가 압축 응답을 보내면 raw byte 는 gzip 데이터라 XML 파싱 실패)
+     * 이유:
+     *   RestTemplate 이 String 으로 변환할 때 Content-Type charset 이 없으면
+     *   ISO-8859-1 로 디코딩되며 XML 파서가 "Content is not allowed in prolog" 로 거부한다.
+     *   byte[] 로 받고 gzip 을 disable 해서 원본 XML 을 파서가 직접 인코딩 해석하도록 한다.
+     */
+    private byte[] fetchXml(String url) {
         try {
-            String xml = restTemplate.getForObject(url, String.class);
-            if (xml == null || xml.isBlank()) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setAccept(java.util.List.of(MediaType.APPLICATION_XML, MediaType.TEXT_XML));
+            headers.set(HttpHeaders.ACCEPT_ENCODING, "identity");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<byte[]> resp = restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
+            byte[] bytes = resp.getBody();
+            if (bytes == null || bytes.length == 0) {
                 log.warn("[EKAPE-API] 빈 응답 url={}", url);
                 return null;
             }
-            return xml;
+            return bytes;
         } catch (Exception e) {
             log.error("[EKAPE-API] HTTP 오류 url={}", url, e);
             return null;
@@ -208,10 +228,10 @@ public class EkapeApiClient {
      * - 소는 gradeFilter 와 일치하는 grdNm 만 선택
      * - 여러 후보 중 첫 번째 사용
      */
-    private Integer parseAveragePrice(String xml, EkapeProduct product) {
+    private Integer parseAveragePrice(byte[] xmlBytes, EkapeProduct product) {
         try {
             DocumentBuilder builder = xmlFactory.newDocumentBuilder();
-            Document doc = builder.parse(new InputSource(new StringReader(xml)));
+            Document doc = builder.parse(new ByteArrayInputStream(xmlBytes));
 
             String resultCode = getSingleTagText(doc, "resultCode");
             if (!"00".equals(resultCode)) {
@@ -237,9 +257,21 @@ public class EkapeApiClient {
                 return Integer.parseInt(ntslPrc.trim());
             }
         } catch (Exception e) {
-            log.error("[EKAPE-API] XML 파싱 오류", e);
+            // 실패 응답의 앞 100 바이트를 hex 로 남겨 진단 편의 확보
+            String head = hexDump(xmlBytes, 100);
+            log.error("[EKAPE-API] XML 파싱 오류 head[{}]={} err={}",
+                    Math.min(xmlBytes.length, 100), head, e.getMessage());
         }
         return null;
+    }
+
+    private static String hexDump(byte[] bytes, int limit) {
+        int len = Math.min(bytes.length, limit);
+        StringBuilder sb = new StringBuilder(len * 3);
+        for (int i = 0; i < len; i++) {
+            sb.append(String.format("%02x ", bytes[i]));
+        }
+        return sb.toString().trim();
     }
 
     private String getTagText(Element parent, String tagName) {
