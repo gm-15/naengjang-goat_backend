@@ -1,10 +1,19 @@
 package com.naengjang_goat.inventory_system.batch.ekape;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.StringReader;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -12,43 +21,76 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * EKAPE(축산물품질평가원 ekapepia.com) 소비자가격 HTML 파싱 클라이언트.
+ * EKAPE 축산물 소비자가격 공공데이터포털 정식 OpenAPI 클라이언트.
  *
- * 대상 URL:
- *   https://www.ekapepia.com/v3/price/consumer/periodPrice/excel.do
- *   ?livestockType=4304&spec=27&aggregationUnit=DAY&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ * 서비스: 축산물품질평가원_축산물유통정보 (data.go.kr/data/15000577)
+ * 오퍼레이션: consumerPriceDaily (일자별 축산물소비자가격 정보)
  *
- * 파라미터 출처 (2026-05-04 실측):
- *   소(4301): 안심=21, 등심=22, 설도=36, 양지=40, 갈비=50 / grade=03(1등급)
- *   돼지(4304): 앞다리=25, 삼겹살=27, 갈비=28, 목심=68 / grade 없음
- *   닭(9901): 육계(kg)=99 / grade 없음 / 단위=원/kg
+ * 요청 파라미터:
+ *   serviceKey  : 공공데이터포털 인증키
+ *   standYmd    : 기준일자 (yyyyMMdd)
+ *   judgeKind   : 축종코드 (4301 소, 4304 돼지, 9901 닭, 9903 계란 등)
+ *   itemCd      : 품목코드 (닭·계란은 생략 가능)
  *
- * 반환 단위:
- *   소·돼지 = 원/100g, 닭 육계(kg) = 원/kg
- *   → 모두 retailPrice에 저장. unit 컬럼으로 구분 가능.
+ * 축종/품목 코드 (활용가이드 v2.9):
+ *   [소       4301] 21 안심, 22 등심, 36 설도, 40 양지, 50 갈비   (등급 응답: 1++ / 1+ / 1 / 2 / 3)
+ *   [돼지     4304] 25 앞다리, 27 삼겹살, 28 갈비, 68 목살        (등급 없음: '구분없음')
+ *   [수입쇠고기 4401] 31 갈비(냉동), 37 갈비살(냉장)              (grdNm 에 국가명: 미국산 등)
+ *   [수입돼지   4402] 27 삼겹살                                    (등급 없음)
+ *   [닭       9901] itemCd 생략 → 육계(kg)                        (등급 없음)
+ *   [계란     9903] itemCd 생략 → XL30구(일반란)                  (등급 없음)
+ *
+ * 응답 단위:
+ *   소·돼지 = 원/100g
+ *   닭      = 원/kg
+ *   계란    = 원/30구  ← 다른 축종과 다름. 소비처에서 unit 확인 필수
+ *
+ * 응답 특이사항:
+ *   - 한 응답에 실제 날짜 데이터 + standYmd='평년' 데이터가 함께 옴 → 평년은 필터링
+ *   - 소는 등급별로 여러 item 반환 → 대표 등급(1등급)만 선택
+ *
+ * 2026-09-22 sim — 기존 HTML 파싱(ekapepia.com) 방식에서 정식 OpenAPI 로 전환.
+ *   전환 배경: EKAPE 사이트가 '다봄' 으로 리브랜딩되며 기존 endpoint 정지 (2026-09-18 확인).
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EkapeApiClient {
 
-    private static final String BASE_URL =
-            "https://www.ekapepia.com/v3/price/consumer/periodPrice/excel.do";
-    private static final DateTimeFormatter EKAPE_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter YMD_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    // 일별 응답 날짜 헤더: "05월 03일"
-    private static final Pattern DAY_HEADER = Pattern.compile("(\\d{2})월\\s*(\\d{2})일");
-    // 가격 셀 내 숫자 (콤마 포함): "2,811" 또는 "11,234"
-    private static final Pattern PRICE_NUM = Pattern.compile("(\\d{1,2},\\d{3})");
+    /** 소 등급 선택 필터 (여러 등급 중 대표값). */
+    private static final String CATTLE_GRADE_FILTER = "1등급";
 
+    /** 수입 쇠고기 국가 필터 (한국 수입 쇠고기 중 최다인 미국산 기준). */
+    private static final String IMPORT_BEEF_ORIGIN_FILTER = "미국산";
+
+    /** 응답에 함께 오는 평년(장기평균) 데이터 표기. skip 대상. */
+    private static final String YEAR_AVG_MARKER = "평년";
+
+    private final String baseUrl;
+    private final String serviceKey;
     private final RestTemplate restTemplate;
+    private final DocumentBuilderFactory xmlFactory;
 
-    /** EKAPE 재료 파라미터 정의 */
-    public record EkapeProduct(String name, String livestockType, String spec, String grade, String unit) {}
+    public EkapeApiClient(RestTemplate restTemplate,
+                          @Value("${ekape.api.base-url}") String baseUrl,
+                          @Value("${ekape.api.key}") String serviceKey) {
+        this.restTemplate = restTemplate;
+        this.baseUrl = baseUrl;
+        this.serviceKey = serviceKey;
+        this.xmlFactory = DocumentBuilderFactory.newInstance();
+    }
+
+    /** EKAPE 재료 파라미터 정의. */
+    public record EkapeProduct(
+            String name,
+            String judgeKind,
+            String itemCd,
+            String unit,
+            String gradeFilter
+    ) {}
 
     /**
      * 재료명 → EKAPE 파라미터 매핑.
@@ -57,19 +99,33 @@ public class EkapeApiClient {
     private static final List<Map.Entry<String, EkapeProduct>> KEYWORD_LIST;
     static {
         List<Map.Entry<String, EkapeProduct>> list = new ArrayList<>();
-        list.add(Map.entry("삼겹살",  new EkapeProduct("돼지 삼겹살", "4304", "27", "",   "100g")));
-        list.add(Map.entry("목심",    new EkapeProduct("돼지 목심",   "4304", "68", "",   "100g")));
-        list.add(Map.entry("앞다리",  new EkapeProduct("돼지 앞다리", "4304", "25", "",   "100g")));
-        list.add(Map.entry("돼지갈비",new EkapeProduct("돼지 갈비",   "4304", "28", "",   "100g")));
-        list.add(Map.entry("등심",    new EkapeProduct("소 등심",     "4301", "22", "03", "100g")));
-        list.add(Map.entry("안심",    new EkapeProduct("소 안심",     "4301", "21", "03", "100g")));
-        list.add(Map.entry("양지",    new EkapeProduct("소 양지",     "4301", "40", "03", "100g")));
-        list.add(Map.entry("설도",    new EkapeProduct("소 설도",     "4301", "36", "03", "100g")));
-        list.add(Map.entry("갈비",    new EkapeProduct("소 갈비",     "4301", "50", "03", "100g")));
-        list.add(Map.entry("닭",      new EkapeProduct("닭 육계",     "9901", "99", "",   "kg"  )));
-        list.add(Map.entry("돼지고기",new EkapeProduct("돼지 삼겹살", "4304", "27", "",   "100g")));
-        list.add(Map.entry("소고기",  new EkapeProduct("소 등심",     "4301", "22", "03", "100g")));
-        list.add(Map.entry("쇠고기",  new EkapeProduct("소 등심",     "4301", "22", "03", "100g")));
+        // ── 수입 (국산보다 먼저 배치. "수입삼겹살" 이 "삼겹살" 국산 매핑에 잡히기 전에 우선 매칭) ──
+        list.add(Map.entry("수입갈비살", new EkapeProduct("수입쇠고기 갈비살(냉장)", "4401", "37", "100g", IMPORT_BEEF_ORIGIN_FILTER)));
+        list.add(Map.entry("수입갈비",   new EkapeProduct("수입쇠고기 갈비(냉동)",   "4401", "31", "100g", IMPORT_BEEF_ORIGIN_FILTER)));
+        list.add(Map.entry("수입삼겹살", new EkapeProduct("수입돼지 삼겹살",         "4402", "27", "100g", null)));
+        list.add(Map.entry("수입쇠고기", new EkapeProduct("수입쇠고기 갈비(냉동)",   "4401", "31", "100g", IMPORT_BEEF_ORIGIN_FILTER)));
+        list.add(Map.entry("수입돼지",   new EkapeProduct("수입돼지 삼겹살",         "4402", "27", "100g", null)));
+        // ── 국산 돼지 (등급 없음) ──
+        list.add(Map.entry("삼겹살",   new EkapeProduct("돼지 삼겹살", "4304", "27", "100g", null)));
+        list.add(Map.entry("목살",     new EkapeProduct("돼지 목살",   "4304", "68", "100g", null)));
+        list.add(Map.entry("목심",     new EkapeProduct("돼지 목살",   "4304", "68", "100g", null)));
+        list.add(Map.entry("앞다리",   new EkapeProduct("돼지 앞다리", "4304", "25", "100g", null)));
+        list.add(Map.entry("돼지갈비", new EkapeProduct("돼지 갈비",   "4304", "28", "100g", null)));
+        // ── 국산 소 (등급 필터: 1등급 대표) ──
+        list.add(Map.entry("등심",     new EkapeProduct("소 등심",     "4301", "22", "100g", CATTLE_GRADE_FILTER)));
+        list.add(Map.entry("안심",     new EkapeProduct("소 안심",     "4301", "21", "100g", CATTLE_GRADE_FILTER)));
+        list.add(Map.entry("양지",     new EkapeProduct("소 양지",     "4301", "40", "100g", CATTLE_GRADE_FILTER)));
+        list.add(Map.entry("설도",     new EkapeProduct("소 설도",     "4301", "36", "100g", CATTLE_GRADE_FILTER)));
+        list.add(Map.entry("갈비",     new EkapeProduct("소 갈비",     "4301", "50", "100g", CATTLE_GRADE_FILTER)));
+        // ── 닭 (itemCd 생략 → 육계kg) ──
+        list.add(Map.entry("닭",       new EkapeProduct("닭 육계",     "9901", null, "kg",   null)));
+        // ── 계란 (itemCd 생략 → XL30구, 단위 원/30구) ──
+        list.add(Map.entry("계란",     new EkapeProduct("계란 XL30구", "9903", null, "30구", null)));
+        list.add(Map.entry("달걀",     new EkapeProduct("계란 XL30구", "9903", null, "30구", null)));
+        // ── 대체 키워드 (fallback) ──
+        list.add(Map.entry("돼지고기", new EkapeProduct("돼지 삼겹살", "4304", "27", "100g", null)));
+        list.add(Map.entry("소고기",   new EkapeProduct("소 등심",     "4301", "22", "100g", CATTLE_GRADE_FILTER)));
+        list.add(Map.entry("쇠고기",   new EkapeProduct("소 등심",     "4301", "22", "100g", CATTLE_GRADE_FILTER)));
         KEYWORD_LIST = list;
     }
 
@@ -83,96 +139,118 @@ public class EkapeApiClient {
     }
 
     /**
-     * EKAPE 소비자가격 일별 데이터 조회.
+     * 기간 내 일별 가격 조회.
      *
-     * @param product  EKAPE 파라미터 (livestockType, spec, grade)
-     * @param from     조회 시작일
-     * @param to       조회 종료일
-     * @return 날짜 → 전국 평균 가격(정수, 원 단위) 맵. 파싱 실패 시 빈 맵.
+     * 정식 API 는 standYmd 단일 파라미터만 지원하므로 날짜별로 반복 호출한다.
+     *
+     * @return 날짜 → 평균가격(ntslPrc, 정수). 응답 없거나 파싱 실패 시 빈 맵.
      */
     public Map<LocalDate, Integer> fetchDailyPrices(EkapeProduct product, LocalDate from, LocalDate to) {
-        String url = buildUrl(product, from, to, "DAY");
-        String html = fetchHtml(url);
-        if (html == null) return Map.of();
+        if (serviceKey == null || serviceKey.isBlank()) {
+            log.warn("[EKAPE-API] serviceKey 미설정 — 호출 skip");
+            return Map.of();
+        }
 
         Map<LocalDate, Integer> result = new LinkedHashMap<>();
-        parseTableRows(html, from, result);
+        LocalDate cursor = from;
+        while (!cursor.isAfter(to)) {
+            Integer price = fetchSingleDay(product, cursor);
+            if (price != null) {
+                result.put(cursor, price);
+            }
+            cursor = cursor.plusDays(1);
+        }
 
-        log.info("[EKAPE] {} {} {} → {}건 파싱 ({}~{})",
-                product.name(), product.livestockType(), product.spec(),
+        log.info("[EKAPE-API] {} judgeKind={} itemCd={} → {}건 수집 ({}~{})",
+                product.name(), product.judgeKind(), product.itemCd(),
                 result.size(), from, to);
         return result;
     }
 
     // ─── private ────────────────────────────────────────────────────────────
 
-    private String buildUrl(EkapeProduct p, LocalDate from, LocalDate to, String unit) {
-        StringBuilder sb = new StringBuilder(BASE_URL)
-                .append("?livestockType=").append(p.livestockType())
-                .append("&startDate=").append(from.format(EKAPE_DATE_FMT))
-                .append("&endDate=").append(to.format(EKAPE_DATE_FMT))
-                .append("&spec=").append(p.spec())
-                .append("&aggregationUnit=").append(unit);
-        if (!p.grade().isBlank()) sb.append("&grade=").append(p.grade());
+    /** 단일 날짜 API 호출 → 평균가격 반환. null = 데이터 없음/오류. */
+    private Integer fetchSingleDay(EkapeProduct product, LocalDate date) {
+        String url = buildUrl(product, date);
+        String xml = fetchXml(url);
+        if (xml == null) return null;
+        return parseAveragePrice(xml, product);
+    }
+
+    private String buildUrl(EkapeProduct product, LocalDate date) {
+        StringBuilder sb = new StringBuilder(baseUrl)
+                .append("?serviceKey=").append(URLEncoder.encode(serviceKey, StandardCharsets.UTF_8))
+                .append("&standYmd=").append(date.format(YMD_FMT))
+                .append("&judgeKind=").append(product.judgeKind());
+        if (product.itemCd() != null && !product.itemCd().isBlank()) {
+            sb.append("&itemCd=").append(product.itemCd());
+        }
         return sb.toString();
     }
 
-    private String fetchHtml(String url) {
+    private String fetchXml(String url) {
         try {
-            String html = restTemplate.getForObject(url, String.class);
-            if (html == null || html.isBlank() || html.contains("errorV3")) {
-                log.warn("[EKAPE] 빈/오류 응답 url={}", url);
+            String xml = restTemplate.getForObject(url, String.class);
+            if (xml == null || xml.isBlank()) {
+                log.warn("[EKAPE-API] 빈 응답 url={}", url);
                 return null;
             }
-            return html;
+            return xml;
         } catch (Exception e) {
-            log.error("[EKAPE] HTTP 오류 url={}", url, e);
+            log.error("[EKAPE-API] HTTP 오류 url={}", url, e);
             return null;
         }
     }
 
     /**
-     * HTML 테이블에서 날짜-가격 추출.
-     *
-     * 일별 응답 헤더 형식: "05월 03일" (년도 없음)
-     * → from 파라미터의 연도 기준으로 LocalDate 구성.
-     *   단, 12월→1월 경계는 월 감소로 감지해 연도 +1.
+     * XML 응답 파싱 → 평균가격(ntslPrc) 추출.
+     * - standYmd='평년' 항목은 skip
+     * - 소는 gradeFilter 와 일치하는 grdNm 만 선택
+     * - 여러 후보 중 첫 번째 사용
      */
-    private void parseTableRows(String html, LocalDate fromDate, Map<LocalDate, Integer> result) {
-        String[] rows = html.split("<tr>");
-        int year = fromDate.getYear();
-        int prevMonth = 0;
+    private Integer parseAveragePrice(String xml, EkapeProduct product) {
+        try {
+            DocumentBuilder builder = xmlFactory.newDocumentBuilder();
+            Document doc = builder.parse(new InputSource(new StringReader(xml)));
 
-        for (String row : rows) {
-            Matcher headerMatcher = DAY_HEADER.matcher(row);
-            if (!headerMatcher.find()) continue;
-
-            int month = Integer.parseInt(headerMatcher.group(1));
-            int day   = Integer.parseInt(headerMatcher.group(2));
-
-            // 년도 경계 처리: 12월 → 1월 이면 연도 +1
-            if (prevMonth == 12 && month == 1) year++;
-            prevMonth = month;
-
-            LocalDate date;
-            try {
-                date = LocalDate.of(year, month, day);
-            } catch (Exception e) {
-                continue; // 잘못된 날짜 (전년/평년 행 등) 무시
+            String resultCode = getSingleTagText(doc, "resultCode");
+            if (!"00".equals(resultCode)) {
+                String msg = getSingleTagText(doc, "resultMsg");
+                log.warn("[EKAPE-API] 비정상 응답 code={} msg={}", resultCode, msg);
+                return null;
             }
 
-            // 첫 번째 <td> 내 숫자 = 전국 평균 가격
-            int tdStart = row.indexOf("<td>");
-            if (tdStart < 0) continue;
-            int tdEnd = row.indexOf("</td>", tdStart);
-            if (tdEnd < 0) continue;
+            NodeList items = doc.getElementsByTagName("item");
+            for (int i = 0; i < items.getLength(); i++) {
+                Element item = (Element) items.item(i);
 
-            String tdContent = row.substring(tdStart, tdEnd);
-            Matcher priceMatcher = PRICE_NUM.matcher(tdContent);
-            if (!priceMatcher.find()) continue;
+                String standYmd = getTagText(item, "standYmd");
+                if (YEAR_AVG_MARKER.equals(standYmd)) continue;
 
-            int price = Integer.parseInt(priceMatcher.group(1).replace(",", ""));
-            result.put(date, price);
+                if (product.gradeFilter() != null) {
+                    String grdNm = getTagText(item, "grdNm");
+                    if (!product.gradeFilter().equals(grdNm)) continue;
+                }
+
+                String ntslPrc = getTagText(item, "ntslPrc");
+                if (ntslPrc == null || ntslPrc.isBlank()) continue;
+                return Integer.parseInt(ntslPrc.trim());
+            }
+        } catch (Exception e) {
+            log.error("[EKAPE-API] XML 파싱 오류", e);
         }
+        return null;
+    }
+
+    private String getTagText(Element parent, String tagName) {
+        NodeList nodes = parent.getElementsByTagName(tagName);
+        if (nodes.getLength() == 0) return null;
+        return nodes.item(0).getTextContent();
+    }
+
+    private String getSingleTagText(Document doc, String tagName) {
+        NodeList nodes = doc.getElementsByTagName(tagName);
+        if (nodes.getLength() == 0) return null;
+        return nodes.item(0).getTextContent();
     }
 }
