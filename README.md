@@ -12,7 +12,7 @@
 | 항목 | 내용 |
 |---|---|
 | 기간 | 2025.10 ~ 진행 중 (캡스톤 팀 프로젝트) |
-| 역할 | 백엔드 리드 (sim 팀원 1명 협업) |
+| 역할 | 백엔드 리드 박건우(sim 팀원 1명 협업) , 데이터 팀원 심상묵, 프론트 팀원 김건우|
 | 스택 | Spring Boot 3.5 · Java 21 · MySQL 8 · Redis · Spring Batch · Flyway · Resilience4j · FCM |
 | 검증 완료 | 4종 락 전략 비교 (500-스레드 카오스) · 4-소스 가격 통합 · KAMIS 6년 buy-signal threshold |
 | 현재 상태 | 동시성 · 가격 통합 · 발주 이력 CRUD 구현 완료 / UC-CORE-3 발주 시점 예측 미구현 |
