@@ -25,6 +25,7 @@ public class InventoryBatchService {
 
     private final IngredientRepository ingredientRepository;
     private final InventoryBatchRepository batchRepository;
+    private final com.naengjang_goat.inventory_system.workflow.InventoryGate gate;
 
     /**
      * 재고 배치 단건 등록.
@@ -36,6 +37,7 @@ public class InventoryBatchService {
      */
     @Transactional
     public InventoryBatch create(Long userId, BatchRequest request) {
+        gate.lock(userId);
         // 1. 재료 조회 + 소유권 검증
         Ingredient ingredient = ingredientRepository.findById(request.ingredientId())
                 .orElseThrow(() -> new ResponseStatusException(

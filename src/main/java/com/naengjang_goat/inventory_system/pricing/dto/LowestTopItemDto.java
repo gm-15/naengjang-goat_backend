@@ -13,6 +13,8 @@ import java.util.List;
 public class LowestTopItemDto {
     private final Long ingredientId;
     private final String name;
+    /** 재료 기본 관리 단위 (g · ml · 개). 재고 배치 수량이 이 단위로 저장된다. */
+    private final String unit;
     private final Long weekAvg;
     private final Long monthAvg;
     private final Long todayPrice;

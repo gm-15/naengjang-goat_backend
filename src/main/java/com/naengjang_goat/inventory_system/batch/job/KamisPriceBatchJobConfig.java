@@ -31,7 +31,7 @@ public class KamisPriceBatchJobConfig {
                              Step buySignalNotifyStep) {
         return new JobBuilder("kamisPriceJob", jobRepository)
                 .start(kamisPriceStep)
-                .next(buySignalNotifyStep)   // 수집 완료 후 buySignal 알림
+                // Notifications are dispatched after POS reflection and before opening, not during collection.
                 .build();
     }
 

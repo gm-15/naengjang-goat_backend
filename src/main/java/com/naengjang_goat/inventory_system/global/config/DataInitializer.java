@@ -30,6 +30,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@org.springframework.context.annotation.Profile("demo")
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 

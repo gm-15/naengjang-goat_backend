@@ -59,6 +59,7 @@ public class UnitConverter {
      * 예: 0.5 kg → g = 500 g
      */
     public BigDecimal convert(String sourceUnit, BigDecimal value, String targetUnit) {
+        validateCompatible(sourceUnit, targetUnit);
         if (sourceUnit.equalsIgnoreCase(targetUnit)) {
             return value.setScale(SCALE, RoundingMode.HALF_UP);
         }

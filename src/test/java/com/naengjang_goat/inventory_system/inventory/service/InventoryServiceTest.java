@@ -1,38 +1,29 @@
 package com.naengjang_goat.inventory_system.inventory.service;
 
+import static org.assertj.core.api.Assertions.*;
+
+import com.naengjang_goat.inventory_system.global.util.UnitConverter;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-@SpringBootTest
+/** Stock now uses InventoryBatch; guard the unit boundary used by upload/receipt. */
 class InventoryServiceTest {
+  private final UnitConverter units = new UnitConverter();
 
-    @Autowired
-    private InventoryService inventoryService;
+  @Test
+  void scalesCompatibleUnitsWithoutLosingPrecision() {
+    assertThat(units.convert("kg", new BigDecimal("0.5"), "g")).isEqualByComparingTo("500");
+    assertThat(units.convert("g", new BigDecimal("500"), "kg")).isEqualByComparingTo("0.5");
+    assertThat(units.convert("L", new BigDecimal("0.75"), "ml")).isEqualByComparingTo("750");
+  }
 
-    @Test
-    void 동시에_재고차감_테스트() throws InterruptedException {
-
-        Long rawMaterialId = 1L;  // 테스트용 재고 ID (DB에 존재해야 함)
-        int threadCount = 10;
-
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch latch = new CountDownLatch(threadCount);
-
-        for (int i = 0; i < threadCount; i++) {
-            executorService.submit(() -> {
-                try {
-                    inventoryService.decreaseStock(rawMaterialId, 1.0);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-
-        latch.await();
-    }
+  @Test
+  void rejectsWeightVolumeAndCountMixing() {
+    assertThatThrownBy(() -> units.convert("g", BigDecimal.ONE, "ml"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> units.convert("개", BigDecimal.ONE, "g"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> units.convert("포장", BigDecimal.ONE, "포장"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }

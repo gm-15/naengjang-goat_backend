@@ -52,6 +52,7 @@ public class InventoryExcelService {
 
     private final IngredientRepository ingredientRepository;
     private final InventoryBatchRepository batchRepository;
+    private final com.naengjang_goat.inventory_system.workflow.InventoryGate gate;
     private final UserRepository userRepository;
 
     /**
@@ -63,6 +64,7 @@ public class InventoryExcelService {
      */
     @Transactional
     public ExcelUploadResultDto upload(Long userId, MultipartFile file) throws IOException {
+        gate.lock(userId);
         int totalRows = 0;
         int successCount = 0;
         List<String> errors = new ArrayList<>();

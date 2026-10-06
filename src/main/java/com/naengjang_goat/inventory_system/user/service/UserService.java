@@ -9,12 +9,15 @@ import com.naengjang_goat.inventory_system.user.dto.UserSignupRequestDto;
 import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * User의 비즈니스 로직(회원가입, 로그인)을 처리하는 서비스 클래스
@@ -43,7 +46,7 @@ public class UserService {
     public User signup(UserSignupRequestDto signupDto) {
         // 1. 아이디 중복 검사
         if (userRepository.findByUsername(signupDto.getUsername()).isPresent()) {
-            throw new IllegalArgumentException("이미 사용중인 아이디입니다.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용중인 아이디입니다.");
         }
 
         // 2. 비밀번호 암호화
@@ -81,13 +84,18 @@ public class UserService {
     @Transactional
     public TokenResponseDto login(UserLoginRequestDto loginDto) {
         // 1. Spring Security의 AuthenticationManager를 사용하여 사용자 인증 시도
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginDto.getUsername(),
-                        loginDto.getPassword()
-                )
-        );
-        // (인증에 실패하면 여기서 401 Unauthorized 예외가 발생함)
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            loginDto.getUsername(),
+                            loginDto.getPassword()
+                    )
+            );
+        } catch (AuthenticationException e) {
+            // 아이디 없음 · 비밀번호 불일치 → 401 (프론트가 "아이디 또는 비밀번호" 안내)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
+        }
 
         // 2. 인증에 성공했다면, TokenProvider를 사용하여 JWT 토큰 생성
         TokenResponseDto tokenResponseDto = tokenProvider.createTokens(authentication);

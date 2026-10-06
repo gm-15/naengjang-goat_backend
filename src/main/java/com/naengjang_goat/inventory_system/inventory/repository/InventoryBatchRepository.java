@@ -26,6 +26,12 @@ public interface InventoryBatchRepository extends JpaRepository<InventoryBatch, 
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM InventoryBatch b WHERE b.ingredient.id = :ingredientId AND b.quantity > 0")
     BigDecimal sumQuantityByIngredientId(@Param("ingredientId") Long ingredientId);
 
+    // 발주 판단에 쓰는 현재 사용 가능한 재고 (미래 입고/기한 경과 제외).
+    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM InventoryBatch b " +
+           "WHERE b.ingredient.id = :ingredientId AND b.quantity > 0 " +
+           "AND b.inboundDate <= :date AND b.expirationDate >= :date")
+    BigDecimal sumUsableQuantity(@Param("ingredientId") Long ingredientId, @Param("date") LocalDate date);
+
     // 점주별 전체 배치 조회
     @Query("SELECT b FROM InventoryBatch b JOIN FETCH b.ingredient i WHERE i.user.id = :userId AND b.quantity > 0 ORDER BY b.expirationDate ASC")
     List<InventoryBatch> findAllByUserIdWithFetch(@Param("userId") Long userId);

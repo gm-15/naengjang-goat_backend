@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="alerts.legacy-enabled", havingValue="true")
 @RequiredArgsConstructor
 public class AlertScheduler {
 

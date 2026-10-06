@@ -119,7 +119,8 @@ public class DepletionCalculatorService {
     public int calcNextOrderDayDistance(Long userId) {
         StoreSettings settings;
         try {
-            settings = settingsService.getSettingsOrThrow(userId);
+            settings = settingsService.findSettings(userId).orElse(null);
+            if (settings == null) return 7;
         } catch (IllegalStateException e) {
             log.warn("[DepletionCalculator] StoreSettings 미설정 userId={} → 기본값 7일", userId);
             return 7;

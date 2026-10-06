@@ -44,3 +44,8 @@ __pycache__/
 venv/
 crawler/**/debug_*.html
 crawler/**/.env
+
+### Runtime credentials ###
+.env
+firebase-service-account.json
+*-firebase-adminsdk-*.json

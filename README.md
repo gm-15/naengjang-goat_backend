@@ -3,6 +3,8 @@
 자영업 식자재 발주 결정을 코드로 지원하는 Spring Boot 3.5 / Java 21 백엔드.
 4개 외부 가격 소스를 통합하고, 6년 실측 데이터로 도출한 임계값으로 buy-signal을 자동 판정한다.
 
+**최종 시연 연동:** [백엔드 마무리·API·팀원별 작업](docs/handoff/README.md) — POS 판매 반영, 배송/입고 분리, 운영 리포트, 두 시점 알림.
+
 🇬🇧 [README.en.md](README.en.md) · 📜 v1 보존본: [README_0315.md](README_0315.md)
 
 ---

@@ -60,6 +60,14 @@ public class PurchaseOrder {
 
     @Column(columnDefinition = "TEXT")
     private String memo;
+    @Column(name="product_name") private String productName;
+    @Column(name="source_url",length=2048) private String sourceUrl;
+    @Column(name="expected_quantity_base",precision=10,scale=3) private BigDecimal expectedQuantityBase;
+    @Column(name="inventory_unit",length=20) private String inventoryUnit;
+    @Column(name="delivery_status",nullable=false,columnDefinition="varchar(20) default 'LEGACY'")
+    @Builder.Default private String deliveryStatus="WAITING";
+    @Column(name="received_at") private LocalDateTime receivedAt;
+    @Column(name="received_batch_id",unique=true) private Long receivedBatchId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

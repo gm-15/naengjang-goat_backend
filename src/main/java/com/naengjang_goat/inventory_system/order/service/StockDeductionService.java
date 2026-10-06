@@ -17,12 +17,8 @@ import java.util.List;
 /**
  * 재고 차감 전용 빈.
  *
- * processOrder는 @Transactional 없이 실행됨.
- * 따라서 이 메서드는 락 범위 안에서 독립 트랜잭션으로 실행되고 즉시 커밋됨.
- * → 다음 스레드가 락을 획득하면 항상 최신 커밋 값을 읽는다.
- *
- * PESSIMISTIC: PessimisticLockStrategy가 @Transactional 컨텍스트를 제공하면
- *   REQUIRED 전파로 합류 → SELECT FOR UPDATE가 해당 트랜잭션 내에서 실행됨.
+ * OrderService의 전체 트랜잭션에 합류한다. 점주 잠금은 커밋까지 유지되며,
+ * 여러 재료 중 하나라도 부족하면 주문 및 차감 전체를 롤백한다.
  *
  * 반환값: 차감에 사용된 배치 목록 (POS 화면 표시용)
  */

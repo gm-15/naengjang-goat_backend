@@ -15,11 +15,20 @@ import java.time.LocalDate;
 @Getter
 @NoArgsConstructor
 public class PurchaseOrderRequest {
+    @jakarta.validation.constraints.NotNull
     private Long ingredientId;
     private LocalDate orderedAt;
+    @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.Positive @jakarta.validation.constraints.Digits(integer=7,fraction=3)
     private BigDecimal quantity;
+    @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max=20)
     private String baseUnit;
+    @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.DecimalMin("0") @jakarta.validation.constraints.Digits(integer=8,fraction=2)
     private BigDecimal unitPrice;
+    @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max=100)
     private String supplier;
-    private String memo;
+    @jakarta.validation.constraints.Size(max=4096) private String memo;
+    @jakarta.validation.constraints.Size(max=255) private String productName;
+    @jakarta.validation.constraints.Size(max=2048) private String sourceUrl;
+    private BigDecimal packageSize;
+    private String packageUnit;
 }

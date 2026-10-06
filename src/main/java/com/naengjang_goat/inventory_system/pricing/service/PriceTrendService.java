@@ -35,6 +35,7 @@ public class PriceTrendService {
 
     private final MarketPriceRepository marketPriceRepository;
     private final IngredientRepository ingredientRepository;
+    private final java.time.Clock clock;
 
     private static final int WEEK_WINDOW = 7;
     private static final int MONTH_WINDOW = 30;
@@ -49,7 +50,7 @@ public class PriceTrendService {
         double threshold = category.buySignalThreshold;
 
         // 3. 데이터 로딩 (days + 29일: 첫 포인트의 30일 윈도우 확보)
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays((long) days + 29);
         List<MarketPrice> raw = marketPriceRepository
                 .findAllByIngredientIdAndReportedDateBetween(ingredientId, start, end);
