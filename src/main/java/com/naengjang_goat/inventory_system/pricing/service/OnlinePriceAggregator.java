@@ -82,10 +82,10 @@ public class OnlinePriceAggregator {
                     .imageUrl(r.getImageUrl())
                     .price(r.getPrice())
                     .currency(r.getCurrency())
-                    .isDiscount(r.isDiscount())
+                    .discount(r.isDiscount())
                     .weightGrams(r.getWeightGrams())
                     .unitPricePerKg(r.getUnitPricePerKg())
-                    .isLowest(r.getUnitPricePerKg() == minUnit)
+                    .lowest(r.getUnitPricePerKg() == minUnit)
                     .fetchedAt(r.getFetchedAt())
                     .build());
         }

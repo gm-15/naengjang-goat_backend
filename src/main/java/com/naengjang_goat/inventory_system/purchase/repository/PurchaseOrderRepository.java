@@ -23,13 +23,15 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
             "AND po.orderedAt BETWEEN :from AND :to " +
             "AND (:ingredientId IS NULL OR po.ingredient.id = :ingredientId) " +
             "AND (:status IS NULL OR po.status = :status) " +
-            "ORDER BY po.orderedAt DESC")
+            "AND (:deliveryStatus IS NULL OR po.deliveryStatus = :deliveryStatus) " +
+            "ORDER BY po.orderedAt DESC, po.id DESC")
     Page<PurchaseOrder> findFiltered(
             @Param("userId") Long userId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             @Param("ingredientId") Long ingredientId,
             @Param("status") PurchaseStatus status,
+            @Param("deliveryStatus") String deliveryStatus,
             Pageable pageable);
 
     /**

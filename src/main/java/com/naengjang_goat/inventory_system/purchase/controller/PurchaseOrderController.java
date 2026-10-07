@@ -45,7 +45,7 @@ public class PurchaseOrderController {
     @PostMapping
     public ResponseEntity<PurchaseOrderResponse> create(
             @AuthenticationPrincipal CustomUserDetails principal,
-            @RequestBody PurchaseOrderRequest request) {
+            @jakarta.validation.Valid @RequestBody PurchaseOrderRequest request) {
         return ResponseEntity.ok(purchaseOrderService.create(principal.getId(), request));
     }
 
@@ -56,10 +56,11 @@ public class PurchaseOrderController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long ingredientId,
             @RequestParam(required = false) PurchaseStatus status,
+            @RequestParam(required = false) String deliveryStatus,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(
-                purchaseOrderService.list(principal.getId(), from, to, ingredientId, status, page, size));
+                purchaseOrderService.list(principal.getId(), from, to, ingredientId, status, deliveryStatus, page, size));
     }
 
     @GetMapping("/summary")

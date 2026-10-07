@@ -32,6 +32,7 @@ public class OrderService {
     private final LockStrategyFactory     lockStrategyFactory;
     private final StockDeductionService   stockDeductionService;
     private final UnitConverter           unitConverter;
+    private final com.naengjang_goat.inventory_system.workflow.InventoryGate gate;
 
     /**
      * 주문 처리 — 핵심 흐름:
@@ -40,14 +41,15 @@ public class OrderService {
      * 3. 차감된 배치 정보를 수집해 응답에 포함
      * 4. Order / OrderItem 저장
      *
-     * ※ @Transactional 없음: 락 범위 안에서 StockDeductionService가 독립 트랜잭션을 열고
-     *   즉시 커밋함. 다음 스레드가 락을 획득하면 항상 최신 커밋 값을 읽는다.
-     *   (외부 트랜잭션이 있으면 REQUIRES_NEW로 인한 커넥션 2개 점유 → 풀 데드락 위험)
+     * 전체 주문과 재료 차감을 하나의 트랜잭션으로 처리한다. 점주 행 잠금으로
+     * POS 업로드·입고와 직렬화하며, 재료 중 하나라도 실패하면 전체를 롤백한다.
      *
      * @param userId  MockAuthFilter가 주입한 점주 ID
      * @param request 채널 타입 + 주문 항목 목록
      */
+    @Transactional(rollbackFor = Exception.class)
     public OrderResponse processOrder(Long userId, OrderRequest request) throws Exception {
+        gate.lock(userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자: " + userId));
 
@@ -59,13 +61,14 @@ public class OrderService {
             Menu menu = menuRepository.findByIdWithBom(itemReq.menuId())
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메뉴: " + itemReq.menuId()));
 
+            if (!menu.getUser().getId().equals(userId) || itemReq.quantity()<=0) throw new IllegalArgumentException("메뉴 소유권/수량을 확인하세요");
             // BOM의 각 재료를 주문 수량만큼 FIFO 차감
             for (RecipeBom bom : menu.getBom()) {
                 BigDecimal totalNeeded = bom.getRequiredQuantity()
                         .multiply(BigDecimal.valueOf(itemReq.quantity()));
 
                 // BOM 단위 → 재료 base 단위로 변환
-                BigDecimal neededInBase = unitConverter.toBase(bom.getUnit(), totalNeeded);
+                BigDecimal neededInBase = unitConverter.convert(bom.getUnit(), totalNeeded, bom.getIngredient().getBaseUnit());
 
                 String lockKey = "ingredient:" + bom.getIngredient().getId();
                 List<DeductedBatchInfo> deducted = lockStrategyFactory.getCurrent()

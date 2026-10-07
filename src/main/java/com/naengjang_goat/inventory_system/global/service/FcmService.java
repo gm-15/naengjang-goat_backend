@@ -30,17 +30,22 @@ public class FcmService {
      * @param body     알림 본문
      */
     public void send(String fcmToken, String title, String body) {
+        deliver(fcmToken, title, body, java.util.Map.of());
+    }
+
+    public String deliver(String fcmToken, String title, String body, java.util.Map<String, String> data) {
         if (firebaseApp == null) {
             log.debug("[FCM] FirebaseApp 미초기화 — 발송 skip. title={}", title);
-            return;
+            return "NOT_CONFIGURED";
         }
         if (fcmToken == null || fcmToken.isBlank()) {
             log.debug("[FCM] fcmToken 없음 — 발송 skip");
-            return;
+            return "WAITING_FOR_TOKEN";
         }
 
         Message message = Message.builder()
                 .setToken(fcmToken)
+                .putAllData(data)
                 .setNotification(Notification.builder()
                         .setTitle(title)
                         .setBody(body)
@@ -50,8 +55,10 @@ public class FcmService {
         try {
             String messageId = FirebaseMessaging.getInstance(firebaseApp).send(message);
             log.info("[FCM] 발송 성공 messageId={} title={}", messageId, title);
+            return "SENT";
         } catch (FirebaseMessagingException e) {
-            log.error("[FCM] 발송 실패 token={} title={}", fcmToken, title, e);
+            log.warn("[FCM] 발송 실패 code={}", e.getMessagingErrorCode());
+            return "FAILED";
         }
     }
 }

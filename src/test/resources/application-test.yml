@@ -18,3 +18,12 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 5s
         permittedNumberOfCallsInHalfOpenState: 1
+
+# Tests require a dedicated database because the legacy stress fixtures clear tables.
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/naengjang_goat_test?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true}
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:}
+  jpa:
+    show-sql: false

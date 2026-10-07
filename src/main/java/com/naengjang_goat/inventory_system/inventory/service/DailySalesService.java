@@ -42,6 +42,8 @@ public class DailySalesService {
     private final RecipeBomRepository recipeBomRepository;
     private final IngredientRepository ingredientRepository;
     private final UnitConverter unitConverter;
+    private final com.naengjang_goat.inventory_system.workflow.PosReportService posReports;
+    private final com.naengjang_goat.inventory_system.workflow.PosUploadRepository posUploads;
 
     /**
      * 특정 재료의 일 평균 소모량 계산.
@@ -52,6 +54,9 @@ public class DailySalesService {
      */
     @Transactional(readOnly = true)
     public BigDecimal getDailyAvgSales(Long userId, Long ingredientId) {
+        if (posUploads.findFirstByUserIdOrderByBusinessDateDescCreatedAtDesc(userId).isPresent()) {
+            return posReports.dailyAverage(userId, ingredientId);
+        }
         LocalDateTime to   = LocalDateTime.now();
         LocalDateTime from = to.minusDays(PERIOD_DAYS);
 

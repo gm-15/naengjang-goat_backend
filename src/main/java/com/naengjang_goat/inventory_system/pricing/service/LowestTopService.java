@@ -66,6 +66,7 @@ public class LowestTopService {
         return LowestTopItemDto.builder()
                 .ingredientId(ingredient.getId())
                 .name(ingredient.getName())
+                .unit(ingredient.getBaseUnit())
                 .weekAvg(kamis != null ? kamis.getWeekAvg() : null)
                 .monthAvg(kamis != null ? kamis.getMonthAvg() : null)
                 .todayPrice(kamis != null ? kamis.getCurrentPricePerKg() : null)

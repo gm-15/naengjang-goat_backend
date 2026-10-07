@@ -1,166 +1,105 @@
 package com.naengjang_goat.inventory_system;
 
-import com.naengjang_goat.inventory_system.inventory.domain.Inventory;
-import com.naengjang_goat.inventory_system.inventory.domain.RawMaterial;
-import com.naengjang_goat.inventory_system.inventory.repository.InventoryRepository;
-import com.naengjang_goat.inventory_system.inventory.repository.RawMaterialRepository;
-import com.naengjang_goat.inventory_system.inventory.service.SaleService;
-import com.naengjang_goat.inventory_system.recipe.domain.Recipe;
-import com.naengjang_goat.inventory_system.recipe.domain.RecipeItem;
-import com.naengjang_goat.inventory_system.recipe.domain.UnitType;
-import com.naengjang_goat.inventory_system.recipe.repository.RecipeItemRepository;
-import com.naengjang_goat.inventory_system.recipe.repository.RecipeRepository;
-import com.naengjang_goat.inventory_system.user.domain.Role;
-import com.naengjang_goat.inventory_system.user.domain.User;
-import com.naengjang_goat.inventory_system.user.repository.UserRepository;
+import static org.assertj.core.api.Assertions.*;
 
-import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import com.naengjang_goat.inventory_system.global.lock.*;
+import com.naengjang_goat.inventory_system.inventory.domain.*;
+import com.naengjang_goat.inventory_system.inventory.repository.*;
+import com.naengjang_goat.inventory_system.menu.domain.*;
+import com.naengjang_goat.inventory_system.menu.repository.MenuRepository;
+import com.naengjang_goat.inventory_system.order.domain.ChannelType;
+import com.naengjang_goat.inventory_system.order.dto.*;
+import com.naengjang_goat.inventory_system.order.service.OrderService;
+import com.naengjang_goat.inventory_system.user.domain.*;
+import com.naengjang_goat.inventory_system.user.repository.UserRepository;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.concurrent.*;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource; // ✅ 추가됨
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
+/** The retired Recipe/Inventory services were replaced by Menu/InventoryBatch. */
 @SpringBootTest
-// 👇 이 줄이 핵심입니다! 테스트 실행 시 DB 스키마를 싹 지우고 새로 만듭니다. (좀비 컬럼 해결)
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create")
+@ActiveProfiles("test")
 class SaleServiceIntegrationTest {
+  @Autowired OrderService orders;
+  @Autowired LockStrategyHolder locks;
+  @Autowired UserRepository users;
+  @Autowired IngredientRepository ingredients;
+  @Autowired InventoryBatchRepository batches;
+  @Autowired MenuRepository menus;
+  User user;
+  Ingredient tomato;
+  Ingredient sauce;
+  Menu menu;
 
-    @Autowired private SaleService saleService;
-    @Autowired private UserRepository userRepository;
-    @Autowired private RawMaterialRepository rawMaterialRepository;
-    @Autowired private InventoryRepository inventoryRepository;
-    @Autowired private RecipeRepository recipeRepository;
-    @Autowired private RecipeItemRepository recipeItemRepository;
-    @Autowired private EntityManager em;
+  @BeforeEach
+  void setup() {
+    user = users.save(new User("sale_" + UUID.randomUUID(), "test", "테스트", Role.OWNER));
+    tomato = ingredients.save(new Ingredient(user, "토마토", "g", BigDecimal.TEN));
+    sauce = ingredients.save(new Ingredient(user, "소스", "g", BigDecimal.TEN));
+    batches.save(
+        new InventoryBatch(
+            tomato,
+            new BigDecimal("2000"),
+            BigDecimal.ONE,
+            LocalDate.now(),
+            LocalDate.now().plusDays(7)));
+    batches.save(
+        new InventoryBatch(
+            sauce,
+            new BigDecimal("3000"),
+            BigDecimal.ONE,
+            LocalDate.now(),
+            LocalDate.now().plusDays(7)));
+    menu = new Menu(user, "토마토파스타", 9000);
+    menu.addBom(new RecipeBom(menu, tomato, new BigDecimal("100"), "g"));
+    menu.addBom(new RecipeBom(menu, sauce, new BigDecimal("150"), "g"));
+    menu = menus.save(menu);
+    locks.setCurrentType(LockType.PESSIMISTIC);
+  }
 
-    @Autowired private TransactionTemplate transactionTemplate;
+  @AfterEach
+  void restore() {
+    locks.setCurrentType(LockType.REDISSON);
+  }
 
-    private Long userId;
-    private Long recipeId;
+  private OrderRequest order(int quantity) {
+    return new OrderRequest(ChannelType.POS, List.of(new OrderItemRequest(menu.getId(), quantity)));
+  }
 
-    @BeforeEach
-    void cleanAndSetup() {
-        transactionTemplate.execute(status -> {
-            // ddl-auto=create 덕분에 테이블이 새로 생성되지만,
-            // 테스트 반복 실행 시 데이터 누적을 방지하기 위해 Truncate는 유지하는 것이 안전합니다.
-            em.createNativeQuery("SET FOREIGN_KEY_CHECKS = 0").executeUpdate();
-            em.createNativeQuery("TRUNCATE TABLE sale_history").executeUpdate(); // 이름 주의
-            em.createNativeQuery("TRUNCATE TABLE recipe_item").executeUpdate();
-            em.createNativeQuery("TRUNCATE TABLE recipe").executeUpdate();
-            em.createNativeQuery("TRUNCATE TABLE inventory").executeUpdate();
-            em.createNativeQuery("TRUNCATE TABLE raw_material").executeUpdate();
-            em.createNativeQuery("TRUNCATE TABLE users").executeUpdate();
-            em.createNativeQuery("SET FOREIGN_KEY_CHECKS = 1").executeUpdate();
-
-            em.flush();
-            em.clear();
-
-            User user = new User();
-            user.setUsername("owner1");
-            user.setPassword("pw1234");
-            user.setOwnerName("상명식당");
-            user.setRole(Role.OWNER);
-            user.setActive(true);
-            user = userRepository.save(user);
-            this.userId = user.getId();
-
-            RawMaterial tomato = new RawMaterial();
-            tomato.setName("토마토");
-            tomato.setUnitType(UnitType.WEIGHT);
-            tomato.setUser(user);
-            tomato = rawMaterialRepository.save(tomato);
-
-            RawMaterial sauce = new RawMaterial();
-            sauce.setName("소스");
-            sauce.setUnitType(UnitType.WEIGHT);
-            sauce.setUser(user);
-            sauce = rawMaterialRepository.save(sauce);
-
-            Inventory tomatoInv = new Inventory(tomato, 2000.0);
-            tomatoInv.setStockUnit("g");
-            inventoryRepository.save(tomatoInv);
-
-            Inventory sauceInv = new Inventory(sauce, 3000.0);
-            sauceInv.setStockUnit("g");
-            inventoryRepository.save(sauceInv);
-
-            Recipe recipe = new Recipe();
-            recipe.setName("토마토 파스타");
-            recipe.setPrice(9000);
-            recipe.setUser(user);
-            recipe = recipeRepository.save(recipe);
-            this.recipeId = recipe.getId();
-
-            RecipeItem item1 = new RecipeItem();
-            item1.setRecipe(recipe);
-            item1.setRawMaterial(tomato);
-            item1.setQuantity(100.0);
-            item1.setUnit("g");
-            recipeItemRepository.save(item1);
-
-            RecipeItem item2 = new RecipeItem();
-            item2.setRecipe(recipe);
-            item2.setRawMaterial(sauce);
-            item2.setQuantity(150.0);
-            item2.setUnit("g");
-            recipeItemRepository.save(item2);
-
-            em.flush();
-            em.clear();
-            return null;
-        });
-    }
-
-    @Test
-    @DisplayName("10명이 동시에 주문해도 재고 정확히 감소한다")
-    void concurrent_sales() throws InterruptedException {
-
-        int threadCount = 10;
-        CountDownLatch latch = new CountDownLatch(threadCount);
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
-        for (int i = 0; i < threadCount; i++) {
-            executor.submit(() -> {
-                try {
-                    saleService.processSale(userId, recipeId, 1);
-                } catch (Exception e) {
-                    System.out.println("Concurrent Exception: " + e.getMessage());
-                } finally {
-                    latch.countDown();
-                }
+  @Test
+  void tenConcurrentSalesDeductExactly() throws Exception {
+    try (var pool = Executors.newFixedThreadPool(10)) {
+      var tasks = new ArrayList<Callable<Boolean>>();
+      for (int i = 0; i < 10; i++)
+        tasks.add(
+            () -> {
+              orders.processOrder(user.getId(), order(1));
+              return true;
             });
-        }
-
-        latch.await();
-
-        // ---------------------
-        // 검증 (Verification)
-        // ---------------------
-        transactionTemplate.execute(status -> {
-            Inventory tomatoInv = inventoryRepository.findAll().stream()
-                    .filter(inv -> inv.getRawMaterial().getName().equals("토마토"))
-                    .findFirst().orElseThrow();
-
-            Inventory sauceInv = inventoryRepository.findAll().stream()
-                    .filter(inv -> inv.getRawMaterial().getName().equals("소스"))
-                    .findFirst().orElseThrow();
-
-            // 초기 2000 - (100 * 10) = 1000
-            assertThat(tomatoInv.getStockQuantity()).isEqualTo(1000.0);
-
-            // 초기 3000 - (150 * 10) = 1500
-            assertThat(sauceInv.getStockQuantity()).isEqualTo(1500.0);
-
-            return null;
-        });
+      for (var future : pool.invokeAll(tasks))
+        assertThat(future.get(30, TimeUnit.SECONDS)).isTrue();
     }
+    assertThat(batches.sumQuantityByIngredientId(tomato.getId())).isEqualByComparingTo("1000");
+    assertThat(batches.sumQuantityByIngredientId(sauce.getId())).isEqualByComparingTo("1500");
+  }
+
+  @Test
+  void shortageInLaterIngredientRollsBackEarlierDeduction() {
+    var small =
+        batches
+            .findAllByIngredientIdAndQuantityGreaterThanOrderByExpirationDateAsc(
+                sauce.getId(), BigDecimal.ZERO)
+            .getFirst();
+    small.setQuantity(new BigDecimal("50"));
+    batches.save(small);
+    assertThatThrownBy(() -> orders.processOrder(user.getId(), order(1)))
+        .isInstanceOf(Exception.class);
+    assertThat(batches.sumQuantityByIngredientId(tomato.getId())).isEqualByComparingTo("2000");
+    assertThat(batches.sumQuantityByIngredientId(sauce.getId())).isEqualByComparingTo("50");
+  }
 }

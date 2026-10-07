@@ -24,6 +24,11 @@ public class StoreSettingsService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
+    public java.util.Optional<StoreSettings> findSettings(Long userId) {
+        return settingsRepository.findByUserId(userId);
+    }
+
+    @Transactional(readOnly = true)
     public StoreSettingsResponse getSettings(Long userId) {
         return settingsRepository.findByUserId(userId)
                 .map(StoreSettingsResponse::from)

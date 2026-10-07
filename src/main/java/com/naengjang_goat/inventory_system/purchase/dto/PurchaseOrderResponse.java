@@ -27,6 +27,13 @@ public class PurchaseOrderResponse {
     private final String memo;
     private final PurchaseStatus status;
     private final LocalDateTime createdAt;
+    private final String productName;
+    private final String sourceUrl;
+    private final String deliveryStatus;
+    private final BigDecimal expectedQuantityBase;
+    private final String inventoryUnit;
+    private final LocalDateTime receivedAt;
+    private final Long receivedBatchId;
 
     public static PurchaseOrderResponse from(PurchaseOrder po) {
         return PurchaseOrderResponse.builder()
@@ -42,6 +49,9 @@ public class PurchaseOrderResponse {
                 .memo(po.getMemo())
                 .status(po.getStatus())
                 .createdAt(po.getCreatedAt())
+                .productName(po.getProductName()).sourceUrl(po.getSourceUrl())
+                .deliveryStatus(po.getDeliveryStatus()).expectedQuantityBase(po.getExpectedQuantityBase())
+                .inventoryUnit(po.getInventoryUnit()).receivedAt(po.getReceivedAt()).receivedBatchId(po.getReceivedBatchId())
                 .build();
     }
 }

@@ -37,6 +37,8 @@ public class PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final IngredientRepository ingredientRepository;
     private final UserRepository userRepository;
+    private final com.naengjang_goat.inventory_system.global.util.UnitConverter units;
+    private final java.time.Clock clock;
 
     // ─── CREATE ─────────────────────────────────────────────────────────────
 
@@ -50,11 +52,27 @@ public class PurchaseOrderService {
 
         // 재료가 해당 점주 소유인지 확인
         if (!ingredient.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("해당 재료에 대한 접근 권한 없음");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,"해당 재료에 대한 접근 권한 없음");
         }
 
+        BigDecimal expected;
+        try {
+            if ("포장".equals(request.getBaseUnit())) {
+                if(request.getPackageSize()==null || request.getPackageSize().signum()<=0 || request.getPackageUnit()==null
+                    || request.getQuantity().stripTrailingZeros().scale()>0) throw new IllegalArgumentException("포장 수량은 정수, 포장당 크기와 단위는 필수입니다");
+                expected=units.convert(request.getPackageUnit(),request.getPackageSize().multiply(request.getQuantity()),ingredient.getBaseUnit());
+            } else expected=units.convert(request.getBaseUnit(),request.getQuantity(),ingredient.getBaseUnit());
+            if(expected.signum()<=0 || expected.compareTo(new BigDecimal("9999999.999"))>0) throw new IllegalArgumentException("재고 환산 수량 범위를 확인하세요");
+            if(request.getSourceUrl()!=null && !request.getSourceUrl().isBlank()) {
+                var uri=java.net.URI.create(request.getSourceUrl());
+                if(!java.util.Set.of("https","http").contains(uri.getScheme()) || uri.getHost()==null) throw new IllegalArgumentException("상품 링크 형식을 확인하세요");
+            }
+        } catch(IllegalArgumentException e) {throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,e.getMessage());}
         BigDecimal totalAmount = request.getQuantity().multiply(request.getUnitPrice());
-        LocalDate orderedAt = request.getOrderedAt() != null ? request.getOrderedAt() : LocalDate.now();
+        if(totalAmount.compareTo(new BigDecimal("9999999999.99"))>0) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"총금액 범위 초과");
+        LocalDate orderedAt = request.getOrderedAt() != null ? request.getOrderedAt() : LocalDate.now(clock);
+
+        if(orderedAt.isAfter(LocalDate.now(clock))) throw new IllegalArgumentException("미래 주문일은 등록할 수 없습니다");
 
         PurchaseOrder order = PurchaseOrder.builder()
                 .user(user)
@@ -66,6 +84,9 @@ public class PurchaseOrderService {
                 .totalAmount(totalAmount)
                 .supplier(request.getSupplier())
                 .memo(request.getMemo())
+                .productName(request.getProductName()!=null ? request.getProductName() : ingredient.getName())
+                .sourceUrl(request.getSourceUrl()).expectedQuantityBase(expected).inventoryUnit(ingredient.getBaseUnit())
+                .deliveryStatus("WAITING")
                 .status(PurchaseStatus.CONFIRMED)
                 .build();
 
@@ -80,14 +101,17 @@ public class PurchaseOrderService {
             LocalDate to,
             Long ingredientId,
             PurchaseStatus status,
+            String deliveryStatus,
             int page,
             int size) {
 
         LocalDate[] range = resolveRange(from, to);
+        if(page<0 || size<1 || size>100) throw new IllegalArgumentException("페이지/크기 범위를 확인하세요");
+        if(deliveryStatus!=null && !java.util.Set.of("WAITING","RECEIVED","LEGACY").contains(deliveryStatus)) throw new IllegalArgumentException("배송 상태를 확인하세요");
         Pageable pageable = PageRequest.of(page, size);
 
         return purchaseOrderRepository
-                .findFiltered(userId, range[0], range[1], ingredientId, status, pageable)
+                .findFiltered(userId, range[0], range[1], ingredientId, status, deliveryStatus, pageable)
                 .map(PurchaseOrderResponse::from);
     }
 
@@ -126,8 +150,9 @@ public class PurchaseOrderService {
 
     /** 기간 기본값 적용 + 최대 1년 제한 → [from, to] */
     private LocalDate[] resolveRange(LocalDate from, LocalDate to) {
-        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate end = to != null ? to : LocalDate.now(clock);
         LocalDate start = from != null ? from : end.minusDays(DEFAULT_DAYS);
+        if(start.isAfter(end)) throw new IllegalArgumentException("조회 시작일은 종료일 이하여야 합니다");
         if (ChronoUnit.DAYS.between(start, end) > MAX_DAYS) {
             start = end.minusDays(MAX_DAYS);
         }
