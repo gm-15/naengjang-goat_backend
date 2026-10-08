@@ -66,13 +66,33 @@ public class UserService {
     }
 
     /**
-     * FCM 토큰 저장/갱신.
-     * 앱 실행 시 최신 토큰을 서버에 등록해 푸시 알림 수신 유지.
+     * FCM 토큰의 현재 소유자를 갱신한다. 같은 기기로 다른 계정에 로그인하면 이전 계정의
+     * 연결을 해제하며, null은 현재 계정의 연결만 해제한다.
      */
     @Transactional
     public void updateFcmToken(Long userId, String fcmToken) {
-        User user = userRepository.findById(userId)
+        updateFcmToken(userId, fcmToken, null);
+    }
+
+    @Transactional
+    public void updateFcmToken(Long userId, String fcmToken, String expectedToken) {
+        if (fcmToken == null) {
+            User user = userRepository.lockById(userId)
+                    .orElseThrow(() -> new NoSuchElementException("사용자 없음: " + userId));
+            // 다른 기기가 더 최근에 등록한 토큰은 이전 기기의 로그아웃으로 해제하지 않는다.
+            if (expectedToken != null && !expectedToken.equals(user.getFcmToken())) return;
+            user.setFcmToken(null);
+            return;
+        }
+        var owners = userRepository.lockFcmTokenOwners(userId, fcmToken);
+        User user = owners.stream().filter(owner -> owner.getId().equals(userId)).findFirst()
                 .orElseThrow(() -> new NoSuchElementException("사용자 없음: " + userId));
+        for (User previousOwner : owners) {
+            if (!previousOwner.getId().equals(userId)) previousOwner.setFcmToken(null);
+        }
+        // 새 소유자 ID가 더 작아도 고유 인덱스에 충돌하지 않도록 이전 연결부터 반영한다.
+        // 이후 등록이 실패하면 이 해제까지 같은 트랜잭션으로 롤백된다.
+        userRepository.flush();
         user.setFcmToken(fcmToken);
     }
 

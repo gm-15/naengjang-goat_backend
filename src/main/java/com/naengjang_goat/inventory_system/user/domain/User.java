@@ -6,7 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "users") // 'user'는 DB 예약어인 경우가 많아 'users'를 권장합니다.
+@Table(name = "users", uniqueConstraints = @UniqueConstraint(
+        name = "uk_users_fcm_token", columnNames = "fcm_token"))
 @Getter
 @Setter
 @NoArgsConstructor

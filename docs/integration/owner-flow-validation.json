@@ -1,0 +1,108 @@
+{
+  "web": "http://127.0.0.1:5174",
+  "api": "http://127.0.0.1:8082",
+  "startedAt": "2026-10-08T14:29:51.491Z",
+  "checks": [
+    {
+      "name": "브라우저 실제 로그인"
+    },
+    {
+      "name": "잘못된 엑셀 거절 및 재고 보존",
+      "status": 400
+    },
+    {
+      "name": "POS 업로드 → 판매 8·매출 64,000·소비 4,000g",
+      "freshFixture": true,
+      "stockBefore": 6000,
+      "stockAfter": 2000,
+      "salesQuantity": 8,
+      "salesAmount": 64000,
+      "consumption": 4000
+    },
+    {
+      "name": "동일 파일 재업로드 시 재고 중복 차감 방지"
+    },
+    {
+      "name": "같은 영업일 다른 파일 충돌 안내 및 재고 보존",
+      "status": 409
+    },
+    {
+      "name": "하루 운영 리포트의 판매·매출·소비·현재재고 실제 API 연결"
+    },
+    {
+      "name": "소비 이력과 시세를 반영한 최신 발주 판단"
+    },
+    {
+      "name": "외부 상품에서 돌아오면 상품명·링크·포장 내용량·가격 기본 입력",
+      "catalogFixtureOnly": true
+    },
+    {
+      "name": "포장 구매 기록 → 배송 대기·상품명 저장·재고 유지",
+      "purchaseOrderId": 1,
+      "expectedQuantityBase": 2000,
+      "stockBefore": 2000,
+      "stockAfter": 2000
+    },
+    {
+      "name": "배송 수령 후 입고 → 재고 2,000g 증가·입고 버튼 제거",
+      "stockBefore": 2000,
+      "stockAfter": 4000
+    },
+    {
+      "name": "서버에서도 중복 입고 409·재고 보존"
+    },
+    {
+      "name": "영업 전 알림 저장·중복 트리거 방지·당시 판단 상세 화면",
+      "deliveryStatus": "NOT_CONFIGURED"
+    },
+    {
+      "name": "판매 자료 없는 새 점주에게 판단 불가·업로드 안내 표시"
+    },
+    {
+      "name": "다른 점주의 재고 배치·알림 상세 조회 거절",
+      "inventoryStatus": 404,
+      "notificationStatus": 404
+    },
+    {
+      "name": "새 점주 초기 재고 1,000g 화면 등록·소수 단가 2.25 전송"
+    },
+    {
+      "name": "새 점주의 실제 메뉴 가격·1인분 레시피 200g 화면 저장",
+      "menuId": 30,
+      "setupOnly": "onboarding via API"
+    },
+    {
+      "name": "빈 POS 양식 다운로드·실제 레시피 적용 → 판매 2·소비 400g·잔여 600g",
+      "salesQuantity": 2,
+      "salesAmount": 24000,
+      "consumption": 400,
+      "stockAfter": 600
+    },
+    {
+      "name": "레시피를 300g으로 수정해도 과거 소비 기록 400g·잔여 600g 유지"
+    },
+    {
+      "name": "전체 브라우저 실행 중 런타임 예외 없음"
+    }
+  ],
+  "screenshots": [
+    "01-invalid-pos.png",
+    "02-pos-reflected.png",
+    "03-same-day-conflict.png",
+    "04-daily-report.png",
+    "05-closing-recommendation.png",
+    "06-external-product-prefill.png",
+    "06-purchase-waiting.png",
+    "07-received.png",
+    "08-notification-detail.png",
+    "09-unknown-data-mobile-width.png",
+    "10-new-owner-actual-pos.png",
+    "11-recipe-edited-historical-snapshot.png"
+  ],
+  "freshFixture": true,
+  "businessDate": "2026-10-08",
+  "ingredientId": 17,
+  "notificationDeliveryStatus": "NOT_CONFIGURED",
+  "completedAt": "2026-10-08T14:30:15.915Z",
+  "result": "PASS"
+}

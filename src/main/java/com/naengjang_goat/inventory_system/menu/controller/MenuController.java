@@ -2,7 +2,9 @@ package com.naengjang_goat.inventory_system.menu.controller;
 
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
 import com.naengjang_goat.inventory_system.menu.dto.MenuResponse;
-import com.naengjang_goat.inventory_system.menu.repository.MenuRepository;
+import com.naengjang_goat.inventory_system.menu.dto.MenuRequest;
+import com.naengjang_goat.inventory_system.menu.service.MenuService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MenuController {
 
-    private final MenuRepository menuRepository;
+    private final MenuService menuService;
 
     /**
      * GET /menus
@@ -32,10 +34,21 @@ public class MenuController {
     public ResponseEntity<List<MenuResponse>> getMenus(
             @AuthenticationPrincipal CustomUserDetails principal
     ) {
-        List<MenuResponse> menus = menuRepository.findAllByUserIdWithBom(principal.getId())
-                .stream()
-                .map(MenuResponse::from)
-                .toList();
-        return ResponseEntity.ok(menus);
+        return ResponseEntity.ok(menuService.list(principal.getId()));
+    }
+
+    @PostMapping
+    public ResponseEntity<MenuResponse> create(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @Valid @RequestBody MenuRequest request) {
+        return ResponseEntity.ok(menuService.create(principal.getId(), request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<MenuResponse> update(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @PathVariable Long id,
+            @Valid @RequestBody MenuRequest request) {
+        return ResponseEntity.ok(menuService.update(principal.getId(), id, request));
     }
 }

@@ -11,7 +11,7 @@ import java.util.Optional;
 public interface MenuRepository extends JpaRepository<Menu, Long> {
 
     // 점주별 메뉴 + BOM 한번에 조회 (N+1 방지)
-    @Query("SELECT m FROM Menu m JOIN FETCH m.bom b JOIN FETCH b.ingredient WHERE m.user.id = :userId")
+    @Query("SELECT DISTINCT m FROM Menu m LEFT JOIN FETCH m.bom b LEFT JOIN FETCH b.ingredient WHERE m.user.id = :userId")
     List<Menu> findAllByUserIdWithBom(@Param("userId") Long userId);
 
     // 단건 조회 + BOM fetch join (트랜잭션 없는 컨텍스트에서 LazyInit 방지)
@@ -20,4 +20,8 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
 
     // 이름 검색
     List<Menu> findAllByUserIdAndNameContaining(Long userId, String name);
+
+    boolean existsByUserIdAndName(Long userId, String name);
+
+    boolean existsByUserIdAndNameAndIdNot(Long userId, String name, Long id);
 }
