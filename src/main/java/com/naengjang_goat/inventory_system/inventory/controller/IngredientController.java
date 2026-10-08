@@ -43,8 +43,12 @@ public class IngredientController {
      */
     @GetMapping("/{id}/batches")
     public ResponseEntity<List<BatchResponse>> getBatches(
+            @AuthenticationPrincipal CustomUserDetails principal,
             @PathVariable Long id
     ) {
+        ingredientRepository.findById(id)
+                .filter(ingredient -> ingredient.getUser().getId().equals(principal.getId()))
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "재료를 찾을 수 없습니다."));
         List<BatchResponse> batches =
                 batchRepository.findAllByIngredientIdAndQuantityGreaterThanOrderByExpirationDateAsc(
                                 id, BigDecimal.ZERO)

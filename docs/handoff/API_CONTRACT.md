@@ -7,11 +7,29 @@
 | 호출 | 용도 |
 |---|---|
 | `GET /menus` | 점주의 메뉴 ID·이름·가격·BOM 조회 |
+| `POST /menus` | 실제 메뉴와 1개 판매당 레시피 등록 |
+| `PUT /menus/{id}` | 기존 메뉴명·가격·실제 레시피 수정 |
 | `GET /pos/menu-mappings` | POS 코드↔메뉴 연결 조회 |
 | `PUT /pos/menu-mappings/DEMO001` | `{"menuId":123}` 코드 연결/변경 |
+| `GET /pos/template` | 인증된 점주의 빈 xlsx 판매 양식 다운로드 |
 | `POST /pos/uploads` | `multipart/form-data`, 필드명 `file`에 xlsx |
 
+메뉴 등록/수정 요청:
+
+```json
+{"name":"배추국","price":8000,"recipe":[{"ingredientId":456,"requiredQuantity":0.5,"unit":"kg"}]}
+```
+
+- 메뉴명은 앞뒤 공백을 제거하며 1~100자, 같은 매장 안에서 중복 불가(409). 가격은 0 이상의 정수. 레시피는 1~100개 재료, 재료 ID 중복 불가.
+- 소모량은 메뉴 **한 개** 판매당 양수이며 소수 최대 3자리. 본인 매장 재료만 사용(타인 재료 403). g/kg, ml/L, 개 호환 단위만 허용하고 재료 기준 단위로 환산해 저장. 환산 후 수량 범위는 0.001~9,999,999.999.
+- GET/등록/수정 응답은 기존 `menuId`, `name`, `price`에 `recipe:[{ingredientId,ingredientName,baseUnit,requiredQuantity,unit}]` 추가. 예시 kg 입력은 재료 기준 g로 `requiredQuantity:500`, `unit:"g"` 반환. 아직 레시피가 없는 기존 메뉴도 GET 목록에 표시하며 `recipe:[]`.
+- 카테고리 가입으로 복사된 소모량 1은 임시값이므로 점주가 실제 1인분 레시피로 수정한 뒤 POS 파일을 반영. 수정은 다음 POS 반영에 적용하며 이미 반영한 판매·소비 리포트 스냅샷은 변경하지 않음. 메뉴 삭제는 미지원.
+- 카테고리 가입을 다시 요청하면 이미 있는 메뉴명은 건너뛰고 신규 메뉴만 추가. 점주가 수정한 기존 메뉴 가격·레시피를 임시값으로 덮어쓰지 않음.
+- 타인 메뉴 수정/없는 메뉴는 404. 메뉴 수정과 POS 반영은 같은 매장 잠금으로 직렬 처리. `GET /ingredients/{id}/batches`도 본인 재료만 조회 가능하며 타인/없는 재료는 404.
+
 파일 규칙:
+
+- 양식 다운로드는 `판매내역`의 헤더만 포함하고 실제 판매 행은 만들지 않음. `작성안내`와 본인의 메뉴명·연결 코드·판매가를 담은 `등록메뉴` 시트를 함께 제공. 빈 양식을 그대로 업로드하면 400이며, 실제 하루 판매 자료를 작성한 뒤 반영.
 
 - 최대 5,000,000바이트, `.xlsx`, `판매내역` 시트, 헤더 순서 `영업일 / 메뉴코드 / 메뉴명 / 판매수량 / 판매금액`.
 - 영업일 하나, 최대 1,000행, 한 메뉴는 하루 합산 한 행. 미래 영업일 불가.
@@ -113,7 +131,7 @@
 `GET /closing/recommendations?businessDate=2026-10-07`
 
 - `generatedAt`, `lastUploadedBusinessDate`, `lastReflectedAt`, `settingsConfigured`, `items` 반환.
-- items: `ingredientId`, `ingredientName`, `baseUnit`, `currentStock`, `dailyAvgSales`, `daysUntilOrder`, `recommendedQuantity`, `expectedDepletionDate`, `stockAlert`, `buySignal`, `priceCoverage`, `priceReason`, `reason`.
+- items: `ingredientId`, `ingredientName`, `baseUnit`, `currentStock`, `dailyAvgSales`, `nextOrderDayDistance`, `recommendedQuantity`, `estimatedDepletionDate`, `stockAlert`, `buySignal`, `priceDataCoverage`, `priceReason`, `reason`. `recommendedQuantity`와 `estimatedDepletionDate`는 소비 이력이 부족하면 null이므로 0/안전으로 취급하지 않음.
 - 일평균 = 최근 30일 POS 소비 합계 ÷ 30. 미업로드 날짜도 분모에 포함. 충분히 쌓인 판매 이력으로 시연하고 반영 날짜를 함께 표시.
 - 제안 수량 = max(일평균 × 다음 발주 요일까지 일수 − 현재 재고, 0). 기준 요일과 같은 날이면 다음 주까지 7일. 설정 없으면 7일 기본값 + `settingsConfigured:false` 안내.
 - `businessDate`는 발주 요일까지 일수를 계산하는 기준 날짜. 재고·판매 평균·가격은 요청 시점의 최신 상태이며 과거 시점 복원 기능이 아님. 소진 예정일은 요청 시점 오늘 기준.
@@ -130,6 +148,11 @@
 - 업로드 알림을 보냈어도 영업 전 알림은 별개로 보냄.
 
 기존 `PATCH /api/users/fcm-token`, body `{"token":"FCM_DEVICE_TOKEN"}` 사용. Expo Push Token을 Firebase Admin에 보내지 말 것. 팀원이 실제 Firebase native 기기 토큰을 얻을 수 있도록 앱/빌드/권한 설정 필요.
+
+- 로그인·앱 실행 시 현재 native 토큰 등록. 같은 토큰을 다른 계정에 등록하면 이전 계정의 연결을 해제하고 새 계정에 연결. 계정별 한 토큰만 지원하며 토큰 문자열은 대소문자를 구별.
+- 로그아웃 시 인증 정보를 지우기 **전에** `{"token":null,"expectedToken":"이 기기에서 마지막으로 등록한 토큰"}`로 현재 기기 연결 해제. 현재 계정에 다른 기기의 토큰이 더 최근에 등록됐다면 변경 없이 204 반환. `expectedToken`을 생략한 null 해제는 현재 계정의 연결 전체를 해제하므로 구형 클라이언트 호환용으로만 사용. 성공 응답은 204이며 기기 토큰을 반환하지 않음. null 해제는 다른 계정의 연결을 변경하지 않음.
+- `token` 필드는 필수이며 값은 null 또는 1~255자 공백 없는 native 토큰. 빈 문자열/누락/잘못된 형식은 400. 동시 등록 충돌은 409이며 짧은 간격으로 재시도할 수 있음. 이전 연결 해제와 새 연결 등록은 한 트랜잭션이므로 실패 시 둘 다 롤백.
+- V010은 기존 중복 토큰 중 사용자 ID가 가장 큰 행만 유지하고 나머지는 null로 정리. 과거 등록 시각이 없어 가장 최근 로그인 계정을 복원하지는 못함. 업데이트 후 앱에서 다시 로그인하면 현재 계정으로 연결됨.
 
 FCM data:
 

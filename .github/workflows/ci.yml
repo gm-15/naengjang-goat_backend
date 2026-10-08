@@ -58,4 +58,37 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build and test
-        run: ./gradlew build --no-daemon
+        env:
+          TEST_DB_PASSWORD: 43214321
+        run: |
+          docker rename '${{ job.services.redis.id }}' redis-test
+          docker exec '${{ job.services.mysql.id }}' sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "CREATE DATABASE IF NOT EXISTS naengjang_goat_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"'
+          ./gradlew build --no-daemon --max-workers=4
+
+  clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            mobile/package-lock.json
+      - name: Web type check and build
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+      - name: Mobile type check, unit tests and Android bundle
+        working-directory: mobile
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run test:unit
+          npx expo export --platform android --output-dir dist

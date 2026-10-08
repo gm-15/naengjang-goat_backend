@@ -3,6 +3,7 @@ package com.naengjang_goat.inventory_system.user.controller;
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
 import com.naengjang_goat.inventory_system.user.dto.OnboardRequest;
 import com.naengjang_goat.inventory_system.user.dto.OnboardResponse;
+import com.naengjang_goat.inventory_system.user.dto.FcmTokenRequest;
 import com.naengjang_goat.inventory_system.user.dto.TokenResponseDto;
 import com.naengjang_goat.inventory_system.user.dto.UserLoginRequestDto;
 import com.naengjang_goat.inventory_system.user.dto.UserSignupRequestDto;
@@ -10,9 +11,13 @@ import com.naengjang_goat.inventory_system.user.service.OnboardService;
 import com.naengjang_goat.inventory_system.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * [v2.1 비활성화]
@@ -71,13 +76,18 @@ public class UserController {
     /**
      * PATCH /api/users/fcm-token
      * 앱 실행 시 FCM 기기 토큰 등록/갱신.
-     * Body: { "token": "FCM_DEVICE_TOKEN" }
+     * Body: { "token": "FCM_DEVICE_TOKEN" }, 로그아웃 시 { "token": null }
      */
     @PatchMapping("/fcm-token")
     public ResponseEntity<Void> updateFcmToken(
             @AuthenticationPrincipal CustomUserDetails principal,
-            @RequestBody java.util.Map<String, String> body) {
-        userService.updateFcmToken(principal.getId(), body.get("token"));
+            @Valid @RequestBody FcmTokenRequest body) {
+        try {
+            userService.updateFcmToken(principal.getId(), body.token(), body.expectedToken());
+        } catch (DataIntegrityViolationException | PessimisticLockingFailureException conflict) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "기기 토큰 등록이 동시에 진행 중입니다. 다시 시도해주세요.");
+        }
         return ResponseEntity.noContent().build();
     }
 }

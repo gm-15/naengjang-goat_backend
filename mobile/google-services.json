@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "654182524411",
+    "project_id": "naengjanggoat",
+    "storage_bucket": "naengjanggoat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:654182524411:android:81de9f146528b0852d175e",
+        "android_client_info": {
+          "package_name": "com.naengjanggoat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALfxIo0TpdR8pTro-mcv8m2LBZDYsyFuo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

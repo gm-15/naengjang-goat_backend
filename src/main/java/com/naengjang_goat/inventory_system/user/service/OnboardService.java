@@ -12,13 +12,11 @@ import com.naengjang_goat.inventory_system.menu.repository.RecipeTemplateReposit
 import com.naengjang_goat.inventory_system.user.domain.User;
 import com.naengjang_goat.inventory_system.user.dto.OnboardRequest;
 import com.naengjang_goat.inventory_system.user.dto.OnboardResponse;
-import com.naengjang_goat.inventory_system.user.repository.UserRepository;
+import com.naengjang_goat.inventory_system.workflow.InventoryGate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -47,12 +45,11 @@ public class OnboardService {
     private final MenuRepository menuRepository;
     private final RecipeBomRepository recipeBomRepository;
     private final IngredientRepository ingredientRepository;
-    private final UserRepository userRepository;
+    private final InventoryGate gate;
 
     @Transactional
     public OnboardResponse onboard(Long userId, OnboardRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 없음: " + userId));
+        User user = gate.lock(userId);
 
         List<String> categories = request.categories();
         List<RecipeTemplate> templates = templateRepository.findAllByCategoryInWithBom(categories);
@@ -67,6 +64,8 @@ public class OnboardService {
         List<String> newIngredients = new ArrayList<>();
 
         for (RecipeTemplate template : templates) {
+            // 가입 재시도나 다른 카테고리의 같은 메뉴는 기존 설정을 유지한다.
+            if (menuRepository.existsByUserIdAndName(userId, template.getMenuName())) continue;
             // 1. 메뉴 생성 (가격 0 — 사장님 직접 설정)
             Menu menu = new Menu(user, template.getMenuName(), 0);
             menuRepository.save(menu);
