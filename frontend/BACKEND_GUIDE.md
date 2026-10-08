@@ -1,5 +1,7 @@
 # 냉장G.O.A.T — 백엔드 연동 가이드
 
+> 이 문서는 2026-04-23의 설계 기록입니다. 현재 실행·구매/입고 흐름은 [통합 실행 안내](../docs/integration/RUNBOOK.md), API는 [최신 계약](../docs/handoff/API_CONTRACT.md)을 기준으로 확인하세요.
+
 > 대상: 백엔드 개발자, 프론트엔드 통합 담당자
 > 버전: 2026-04-23 기준 (plan_kim_0423_01 + plan_kim_0423_02 반영)
 > 프로젝트 루트: `C:\Users\User\Downloads\냉장G.O.A.T (1)\`

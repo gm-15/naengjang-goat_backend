@@ -9,7 +9,7 @@
 `expo-document-picker`가 추가되어 **기존 APK를 새 코드로 한 번 다시 빌드해야 합니다.** 이후 JS 화면 변경은 개발 빌드에서 갱신할 수 있습니다. Node 24와 `npm ci`를 사용하며 `npm run typecheck`, `npm run test:unit`으로 검사합니다.
 
 `frontend/`(웹)와 같은 백엔드 API를 쓰는 모바일 앱입니다.
-화면 8개(로그인·회원가입, 온보딩, 매장 설정, 메인, 최저가 목록/상세, 재고, 발주, 설정)를 네이티브로 구현했습니다.
+로그인·회원가입, 온보딩, 매장 설정, 메인, 최저가 목록/상세, 재고, 발주·배송, 운영·리포트, 알림 상세, 설정 화면을 제공합니다.
 
 | 항목 | 내용 |
 |---|---|
@@ -28,7 +28,7 @@ src/
 │   ├── login.tsx        로그인 / 회원가입 (+ 서버 주소 설정)
 │   ├── onboard.tsx      매장 카테고리 선택
 │   ├── store-setup.tsx  가입 직후 매장 운영 설정
-│   └── (tabs)/          하단 탭: 메인 · 최저가 · 재고 · 발주 · 설정
+│   └── (tabs)/          하단 탭: 메인 · 최저가 · 재고 · 발주 · 운영 · 설정
 ├── api/  hooks/  types/ 백엔드 연동 (웹과 동일)
 ├── components/          공통 UI (카드, 버튼, 바텀시트, 날짜 선택, 차트)
 └── lib/                 저장소 · 서버 주소 · 날짜 유틸
@@ -38,8 +38,8 @@ src/
 
 ```bash
 cd mobile
-npm install
-npx expo start          # QR 코드를 Expo Go 앱으로 스캔
+npm ci
+npx expo start --dev-client # 새 개발 APK를 설치한 뒤 실행
 ```
 
 ## 2. 백엔드 연결
@@ -47,7 +47,7 @@ npx expo start          # QR 코드를 Expo Go 앱으로 스캔
 폰은 `localhost` 로 PC에 접속할 수 없습니다. **PC와 폰을 같은 와이파이**에 두고 PC IP를 씁니다.
 
 1. PC에서 `ipconfig` → IPv4 주소 확인 (예: `192.168.0.12`)
-2. 백엔드 실행 (`backend/` 에서 `docker compose up -d mysql redis` → `./gradlew bootRun`)
+2. 백엔드 실행 (저장소 루트에서 `docker compose up -d mysql redis` → `bash gradlew bootRun`, Windows는 `gradlew.bat bootRun`)
 3. Windows 방화벽에서 **8080 포트 인바운드 허용**
 4. 앱 로그인 화면 오른쪽 위(또는 설정 탭) **서버 주소** → `http://192.168.0.12:8080` 입력 → 연결 테스트 → 저장
 
@@ -60,12 +60,12 @@ HTTP(비 HTTPS) 통신을 위해 `app.json` 에서 `usesCleartextTraffic` 을 �
 
 ```bash
 cd mobile
-npm install
+npm ci
 npx eas-cli@latest login               # Expo 계정 (무료)
 npx eas-cli@latest build -p android --profile preview
 ```
 
-- 처음 실행 시 프로젝트 연결·서명 키 생성을 물어보면 모두 **Y**
+- 기존 `app.json`의 Expo 프로젝트·Android 패키지·Firebase 설정과 기존 서명 설정을 확인하고 빌드
 - 10~20분 뒤 터미널에 뜨는 링크/QR 에서 `.apk` 다운로드 → 폰에 설치
 - 기본 서버 주소는 `eas.json` 의 `EXPO_PUBLIC_API_BASE_URL` (앱 안에서도 변경 가능)
 
