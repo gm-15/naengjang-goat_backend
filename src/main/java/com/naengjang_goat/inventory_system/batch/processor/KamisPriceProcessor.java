@@ -10,16 +10,15 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 
 /**
  * KAMIS DTO → MarketPrice 변환.
  *
- *  - 매칭 전략: item_code 우선 → 없으면 이름 fallback
- *    item_code 가 설정된 재료는 KAMIS 품목명 변형(봄배추/고랭지배추 등)에도 안정적으로 매칭.
- *  - 매칭 실패 시 null 반환 → Spring Batch 가 해당 row 를 자동 skip.
- *  - retail_price / wholesale_price 는 KAMIS 원본 그대로 String 저장
- *    (MarketPrice 엔티티가 String 타입 유지 — KAMIS 가 "1,234" 식 콤마 포함 형식).
+ *  - 매칭 전략: item_code 우선 → 없으면 이름 fallback (모든 user Ingredient).
+ *  - sim, 2026-10-12 — Spring Batch chunk 트랜잭션 안에서 save 를 호출하면 Writer skip 흐름에서
+ *    rollback 되어 저장이 유실되는 현상 확인. 저장은 {@link MarketPriceSaveService} 가
+ *    REQUIRES_NEW 로 열어 별도 commit 하도록 분리. Processor 는 null 을 반환해 Writer 를 skip.
  */
 @Component
 @RequiredArgsConstructor
@@ -27,6 +26,7 @@ import java.util.Optional;
 public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, MarketPrice> {
 
     private final IngredientRepository ingredientRepository;
+    private final MarketPriceSaveService marketPriceSaveService;
 
     @Override
     public MarketPrice process(KamisPriceDto dto) {
@@ -34,31 +34,43 @@ public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, MarketP
             return null;
         }
 
-        // 1) item_code 우선 매칭
-        Optional<Ingredient> match = (dto.getItemCode() != null && !dto.getItemCode().isBlank())
-                ? ingredientRepository.findByKamisItemCode(dto.getItemCode())
-                : Optional.empty();
+        // 1) item_code 우선 매칭 (모든 user Ingredient)
+        List<Ingredient> matches = (dto.getItemCode() != null && !dto.getItemCode().isBlank())
+                ? ingredientRepository.findAllByKamisItemCode(dto.getItemCode())
+                : List.of();
 
         // 2) 코드 매칭 실패 시 이름으로 fallback
-        if (match.isEmpty()) {
-            match = ingredientRepository.findByName(dto.getProductName());
+        if (matches.isEmpty()) {
+            matches = ingredientRepository.findAllByName(dto.getProductName());
         }
 
-        if (match.isEmpty()) {
+        if (matches.isEmpty()) {
             log.debug("[KAMIS-PROCESSOR] no match: itemCode='{}' name='{}'",
                     dto.getItemCode(), dto.getProductName());
             return null;
         }
 
-        log.debug("[KAMIS-PROCESSOR] matched: itemCode='{}' name='{}' → ingredient='{}'",
-                dto.getItemCode(), dto.getProductName(), match.get().getName());
+        // sim, 2026-10-12 — KAMIS 는 요청일 당일 데이터를 밤에 업로드하므로 조회 시점에
+        //   dpr1(당일)이 "-"(= null) 로 올 때가 많다. 그런 경우 dpr2(1일전) 로 fallback 하고
+        //   reportedDate 도 하루 전으로 보정해 "실측 날짜 ↔ 가격" 정합성을 유지한다.
+        String retailPrice = dto.getDpr1();
+        LocalDate reportedDate = LocalDate.now().minusDays(2);  // KamisApiClient 의 p_regday 와 일치
+        if (retailPrice == null) {
+            retailPrice = dto.getDpr2();
+            reportedDate = reportedDate.minusDays(1);
+        }
+        if (retailPrice == null) {
+            log.debug("[KAMIS-PROCESSOR] dpr1·dpr2 모두 비어 skip: name='{}'", dto.getProductName());
+            return null;
+        }
 
-        MarketPrice mp = new MarketPrice();
-        mp.setIngredient(match.get());
-        mp.setRetailPrice(dto.getDpr1());
-        mp.setWholesalePrice(dto.getDpr4());
-        mp.setUnit(dto.getUnit());
-        mp.setReportedDate(LocalDate.now().minusDays(1));  // KamisApiClient 의 p_regday 와 일치
-        return mp;
+        // REQUIRES_NEW 로 저장 — chunk tx 와 분리해서 Writer skip 영향 없이 commit
+        marketPriceSaveService.saveAll(matches, retailPrice, dto.getDpr4(), reportedDate);
+
+        log.debug("[KAMIS-PROCESSOR] saved name='{}' price={} unit=kg reportedDate={} userCount={}",
+                dto.getProductName(), retailPrice, reportedDate, matches.size());
+
+        // Writer 는 skip (별도 tx 로 이미 저장)
+        return null;
     }
 }
