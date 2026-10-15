@@ -46,7 +46,8 @@ public class KamisApiClient {
     private static final String[] CATEGORY_CODES =
             { "100", "200", "300", "400", "500", "600" };
 
-    private static final DateTimeFormatter KAMIS_DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    // sim, 2026-10-12 — KAMIS 는 dash 포맷만 응답. slash 포맷은 빈 응답(error_code=200) 반환.
+    private static final DateTimeFormatter KAMIS_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     /** 주말 건너뛴 가장 최근 평일. 공휴일 판단은 API 응답에 위임. */
     private static LocalDate prevWeekday(LocalDate from) {
         LocalDate d = from;
@@ -66,8 +67,13 @@ public class KamisApiClient {
                     "&p_cert_key=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
                     "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
                     "&p_returntype=" + URLEncoder.encode(returnType, StandardCharsets.UTF_8) +
-                    "&p_product_cls_code=01" +
-                    "&p_category_code=" + categoryCode +
+                    // sim, 2026-10-12 — KAMIS 공식 param 수정 및 kg 환산 활성
+                    //   · p_category_code → p_item_category_code (공식 param. 틀린 이름이면 KAMIS 가 자료없음 반환)
+                    //   · p_convert_kg_yn=Y 추가 — 박스/포기 단위 → kg 환산 (dpr1/dpr4 가 원/kg 로 반환)
+                    //   · p_product_cls_code=02 — 소매(01)는 KAMIS 응답이 거의 없어 도매로 호출 (dpr1=당일 도매평균가)
+                    "&p_product_cls_code=02" +
+                    "&p_item_category_code=" + categoryCode +
+                    "&p_convert_kg_yn=Y" +
                     "&p_regday=" + regday;
 
             return restTemplate.getForObject(url, String.class);
@@ -113,7 +119,9 @@ public class KamisApiClient {
      *   → 연휴 직후에도 가장 최근 데이터를 자동으로 수집
      */
     public List<KamisPriceDto> fetchAllCategories() {
-        LocalDate candidate = prevWeekday(LocalDate.now().minusDays(1));
+        // sim, 2026-10-12 — KAMIS 는 당일 가격을 그날 밤에 업데이트하므로 "오늘-2일" 부터 조회해야
+        //   dpr1(당일가)이 비어있지 않은 가장 최근 평일 데이터를 받는다.
+        LocalDate candidate = prevWeekday(LocalDate.now().minusDays(2));
 
         for (int attempt = 1; attempt <= 10; attempt++) {
             log.info("[KAMIS-API] 조회 기준일: {} ({}) [{}회차]",
@@ -181,6 +189,7 @@ public class KamisApiClient {
             dto.setProductName(getTagText(e, "item_name"));
             dto.setUnit(getTagText(e, "unit"));
             dto.setDpr1(normalize(getTagText(e, "dpr1")));
+            dto.setDpr2(normalize(getTagText(e, "dpr2")));
             dto.setDpr4(normalize(getTagText(e, "dpr4")));
 
             if (isBlank(dto.getProductName())) continue;

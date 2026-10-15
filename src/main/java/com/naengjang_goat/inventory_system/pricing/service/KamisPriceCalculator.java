@@ -42,7 +42,16 @@ public class KamisPriceCalculator {
             return null;
         }
 
-        MarketPrice latest = recent.get(0);
+        // sim, 2026-10-12 — retailPrice 가 null 인 과거 더미 레코드를 걸러낸다.
+        //   KAMIS 응답에서 "-" 로 오는 경우를 KamisApiClient.normalize 가 null 로 바꿔 저장하므로
+        //   latest 가 null 가격이면 kamis=null 로 반환되어 UI 가 빈 상태가 되는 문제가 있다.
+        MarketPrice latest = recent.stream()
+                .filter(mp -> parsePrice(mp.getRetailPrice()) != null)
+                .findFirst()
+                .orElse(null);
+        if (latest == null) {
+            return null;
+        }
         Long todayPrice = toPricePerKg(latest.getRetailPrice(), latest.getUnit());
         if (todayPrice == null) {
             return null;
