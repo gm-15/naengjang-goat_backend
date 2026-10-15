@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-16",
+  "scope": "cloud verification database goat_price_verify; excludes teammates or owner PC databases",
+  "actualProvider": "KAMIS",
+  "httpStatus": 502,
+  "batch": {
+    "status": "FAILED",
+    "readCount": 0,
+    "filteredCount": 0,
+    "writtenItems": 0
+  },
+  "database": {
+    "latestDate": null,
+    "storedRows": 0,
+    "trustedRows": 0
+  },
+  "liveProviderVerified": false,
+  "reason": "KAMIS destination denied by cloud network proxy (403)"
+}

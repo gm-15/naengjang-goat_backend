@@ -139,6 +139,9 @@ function KamisCard({ data }: { data: PriceDetail }) {
             </span>
             <span className="text-sm opacity-90">/ kg</span>
           </div>
+          <div className="text-xs opacity-90 mb-3">
+            {[k.priceSource, k.priceBasis === "WHOLESALE" ? "도매 기준" : k.priceBasis === "RETAIL" ? "소매 기준" : null, k.kindName, k.grade].filter(Boolean).join(" · ")}
+          </div>
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="bg-white/10 rounded-lg px-3 py-2">
               <div className="opacity-80">주 평균</div>

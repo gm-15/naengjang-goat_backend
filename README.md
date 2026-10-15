@@ -7,6 +7,8 @@
 
 **실행·시연:** [통합 서비스 실행 안내](docs/integration/RUNBOOK.md) · [API 계약](docs/handoff/API_CONTRACT.md) · [마무리 상태와 팀원 확인](docs/integration/STATUS.md).
 
+**가격 수집 수정·데이터 확인:** [KAMIS 관측일·도매/소매·중복 적재 수정 및 검증 상태](docs/integration/KAMIS_PRICE_FIX.md).
+
 🇬🇧 [README.en.md](README.en.md) · 📜 v1 보존본: [README_0315.md](README_0315.md)
 
 ---
@@ -58,7 +60,7 @@ v0은 동시성 락 전략 데모였다. 2026-04-05 plan.md에서 자기 비판�
 | 축 | 유스케이스 | 상태 | 코드 진실 |
 |---|---|:---:|---|
 | 우선순위 | UC-CORE-1: 재고 임박 | ✅ | POS 소비 이력·사용 가능한 재고로 부족 판단·권장량·소진 예상일 제공 |
-| 가격 | UC-CORE-2: 최저가 Top 5 | 🟡 | `pricing/` 17파일 빌드 통과, 통합 테스트 0건 |
+| 가격 | UC-CORE-2: 최저가 Top 5 | 🟡 | 가격 정합성 회귀 20개 포함 전체 63개 통과. 공식 KAMIS 실적재는 클라우드 네트워크 허용 대기 |
 | 타이밍 | UC-CORE-3: 발주 시점 예측 · 알림 | ✅ | `/closing/recommendations`, 판매 반영 후·영업 시작 3시간 전 알림과 상세 |
 | 이력 | UC-SUP-8: 발주 이력 CRUD | ✅ | create/list/summary + Excel export 구현 완료 |
 

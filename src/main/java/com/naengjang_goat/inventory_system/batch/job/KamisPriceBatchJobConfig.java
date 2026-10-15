@@ -15,6 +15,7 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
+import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
@@ -39,7 +40,7 @@ public class KamisPriceBatchJobConfig {
     public Step kamisPriceStep(JobRepository jobRepository,
                                PlatformTransactionManager tx) {
         return new StepBuilder("kamisPriceStep", jobRepository)
-                .<KamisPriceDto, MarketPrice>chunk(50, tx)
+                .<KamisPriceDto, List<MarketPrice>>chunk(50, tx)
                 .reader(reader)
                 .processor(processor)
                 .writer(writer)

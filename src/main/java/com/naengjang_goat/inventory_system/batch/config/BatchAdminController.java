@@ -37,10 +37,13 @@ public class BatchAdminController {
             JobExecution execution = jobLauncher.run(kamisPriceJob, BatchTimestampParams.now());
             log.info("[BATCH-ADMIN] kamisPriceJob triggered: executionId={} status={}",
                     execution.getId(), execution.getStatus());
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.status(execution.getStatus().isUnsuccessful() ? 502 : 200).body(Map.of(
                     "executionId", execution.getId(),
                     "status", execution.getStatus().toString(),
-                    "startTime", execution.getStartTime() != null ? execution.getStartTime().toString() : "null"
+                    "startTime", execution.getStartTime() != null ? execution.getStartTime().toString() : "null",
+                    "readCount", execution.getStepExecutions().stream().mapToLong(s -> s.getReadCount()).sum(),
+                    "filteredCount", execution.getStepExecutions().stream().mapToLong(s -> s.getFilterCount()).sum(),
+                    "writtenItems", execution.getStepExecutions().stream().mapToLong(s -> s.getWriteCount()).sum()
             ));
         } catch (Exception e) {
             log.error("[BATCH-ADMIN] kamisPriceJob trigger failed", e);

@@ -94,6 +94,7 @@ public class EkapeScheduler {
             mp.setUnit(product.unit());
             mp.setReportedDate(date);
             mp.setSource(SOURCE);
+            mp.setPriceBasis("RETAIL");
 
             marketPriceRepository.save(mp);
             saved++;

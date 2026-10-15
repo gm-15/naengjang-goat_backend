@@ -11,8 +11,13 @@ import java.time.LocalDate;
 @Builder
 @AllArgsConstructor
 public class KamisPriceDto {
-    private final Long currentPricePerKg;  // 가장 최근 retail (원/kg 가정)
+    private final Long currentPricePerKg;  // priceBasis에 해당하는 실제 최근 관측, 원/kg
     private final LocalDate priceDate;
     private final Long weekAvg;            // 최근 7일 평균
     private final Long monthAvg;           // 최근 30일 평균 (v0.3 추가)
+    private final String priceBasis;
+    private final String priceSource;
+    private final String kindName;
+    private final String grade;
+    private final String unit;
 }
