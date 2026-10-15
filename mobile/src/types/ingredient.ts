@@ -1,3 +1,11 @@
+export interface PriceMetadata {
+  priceBasis?: "WHOLESALE" | "RETAIL" | "LEGACY" | null;
+  priceSource?: string | null;
+  kindName?: string | null;
+  grade?: string | null;
+  unit?: string | null;
+}
+
 /**
  * 백엔드 DTO 매핑 (2026-06-04 기준).
  * 출처: backend/pricing/dto/*.java
@@ -24,7 +32,7 @@ export interface TrendPoint {
 }
 
 /** /prices/{id}/trend 응답 래퍼 (PriceTrendResponse) */
-export interface PriceTrend {
+export interface PriceTrend extends PriceMetadata {
   ingredientId: number;
   ingredientName: string;
   currentBuySignal: boolean;
@@ -60,7 +68,7 @@ export interface LowestTopItem {
 // ────────── 최저가 상세 (price detail) ──────────
 
 /** PriceDetailDto.kamis (KamisPriceDto in pricing 패키지) */
-export interface KamisPrice {
+export interface KamisPrice extends PriceMetadata {
   currentPricePerKg: number | null;
   priceDate: string | null;      // "YYYY-MM-DD"
   weekAvg: number | null;

@@ -22,4 +22,9 @@ public class PriceTrendResponse {
     private final String signalReason;
     private final int dataCoverage;
     private final List<TrendPointDto> points;
+    private final String priceBasis;
+    private final String priceSource;
+    private final String kindName;
+    private final String grade;
+    private final String unit;
 }

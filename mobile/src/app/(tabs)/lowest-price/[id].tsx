@@ -146,12 +146,15 @@ function KamisCard({ data }: { data: PriceDetail }) {
     <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 20, padding: 20, marginBottom: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         <Ionicons name="stats-chart-outline" size={16} color="#fff" />
-        <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 14 }}>KAMIS 공식 시세</Text>
+        <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 14 }}>공공 시세</Text>
       </View>
       {k && k.currentPricePerKg !== null ? (
         <>
           <Text style={{ color: "#fff", fontSize: 34, fontWeight: "800", marginTop: 8 }}>
             {k.currentPricePerKg.toLocaleString("ko-KR")}원<Text style={{ fontSize: 15, fontWeight: "500" }}> / kg</Text>
+          </Text>
+          <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, marginTop: 8 }}>
+            {[k.priceSource, k.priceBasis === "WHOLESALE" ? "도매 기준" : k.priceBasis === "RETAIL" ? "소매 기준" : null, k.kindName, k.grade].filter(Boolean).join(" · ")}
           </Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
             {[

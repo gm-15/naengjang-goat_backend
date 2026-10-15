@@ -1,217 +1,166 @@
 package com.naengjang_goat.inventory_system.batch.service;
 
 import com.naengjang_goat.inventory_system.batch.dto.KamisPriceDto;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import org.w3c.dom.*;
-import org.xml.sax.InputSource;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
+import javax.xml.parsers.DocumentBuilderFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class KamisApiClient {
-
-    @Value("${kamis.api.base-url}")
-    private String baseUrl;
-
-    @Value("${kamis.api.key}")
-    private String apiKey;
-
-    @Value("${kamis.api.id}")
-    private String apiId;
-
-    @Value("${kamis.api.return-type}")
-    private String returnType;
-
-    @Value("${kamis.api.action.daily}")
-    private String dailyAction;
-
+    @Value("${kamis.api.base-url}") private String baseUrl;
+    @Value("${kamis.api.key}") private String apiKey;
+    @Value("${kamis.api.id}") private String apiId;
+    @Value("${kamis.api.return-type}") private String returnType;
+    @Value("${kamis.api.action.daily}") private String dailyAction;
+    @Value("${kamis.api.product-class:02}") private String productClass;
     private final RestTemplate restTemplate;
+    private final Clock clock;
+    private static final String[] CATEGORIES = {"100", "200", "300", "400", "500", "600"};
+    private static final Pattern ABSOLUTE_DATE = Pattern.compile("(?:(\\d{4})[-/])?(\\d{1,2})[-/](\\d{1,2})");
 
-    /** KAMIS 카테고리 코드 (식량작물·채소·축산·수산·조미료·과일). */
-    private static final String[] CATEGORY_CODES =
-            { "100", "200", "300", "400", "500", "600" };
-
-    // sim, 2026-10-12 — KAMIS 는 dash 포맷만 응답. slash 포맷은 빈 응답(error_code=200) 반환.
-    private static final DateTimeFormatter KAMIS_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    /** 주말 건너뛴 가장 최근 평일. 공휴일 판단은 API 응답에 위임. */
-    private static LocalDate prevWeekday(LocalDate from) {
-        LocalDate d = from;
-        while (d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY) {
-            d = d.minusDays(1);
-        }
-        return d;
+    private static LocalDate prevWeekday(LocalDate date) {
+        while (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY)
+            date = date.minusDays(1);
+        return date;
     }
 
-    /**
-     * 단일 카테고리 + 날짜 지정 호출.
-     */
-    public String fetchXml(String categoryCode, String regday) {
+    public String fetchXml(String category, String regday) {
+        if (!List.of("01", "02").contains(productClass))
+            throw new IllegalStateException("KAMIS product-class must be 01 or 02");
+        String url = baseUrl + "?action=" + encode(dailyAction)
+                + "&p_cert_key=" + encode(apiKey) + "&p_cert_id=" + encode(apiId)
+                + "&p_returntype=" + encode(returnType) + "&p_product_cls_code=" + productClass
+                + "&p_item_category_code=" + category + "&p_convert_kg_yn=Y&p_regday=" + regday;
         try {
-            String url = baseUrl +
-                    "?action=" + URLEncoder.encode(dailyAction, StandardCharsets.UTF_8) +
-                    "&p_cert_key=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) +
-                    "&p_cert_id=" + URLEncoder.encode(apiId, StandardCharsets.UTF_8) +
-                    "&p_returntype=" + URLEncoder.encode(returnType, StandardCharsets.UTF_8) +
-                    // sim, 2026-10-12 — KAMIS 공식 param 수정 및 kg 환산 활성
-                    //   · p_category_code → p_item_category_code (공식 param. 틀린 이름이면 KAMIS 가 자료없음 반환)
-                    //   · p_convert_kg_yn=Y 추가 — 박스/포기 단위 → kg 환산 (dpr1/dpr4 가 원/kg 로 반환)
-                    //   · p_product_cls_code=02 — 소매(01)는 KAMIS 응답이 거의 없어 도매로 호출 (dpr1=당일 도매평균가)
-                    "&p_product_cls_code=02" +
-                    "&p_item_category_code=" + categoryCode +
-                    "&p_convert_kg_yn=Y" +
-                    "&p_regday=" + regday;
-
             return restTemplate.getForObject(url, String.class);
-        } catch (Exception e) {
-            log.error("[KAMIS-API] fetchXml error category={} regday={}", categoryCode, regday, e);
-            return null;
+        } catch (Exception failure) {
+            // RestTemplate 예외의 전체 URL에는 인증 키가 들어갈 수 있다.
+            throw new IllegalStateException("KAMIS 접근 실패: category=" + category
+                    + " date=" + regday + " type=" + failure.getClass().getSimpleName());
         }
     }
 
-    /** @deprecated fetchXml(categoryCode, regday) 사용 권장. */
-    @Deprecated
-    public String fetchXml(String categoryCode) {
-        return fetchXml(categoryCode, prevWeekday(LocalDate.now().minusDays(1)).format(KAMIS_DATE_FMT));
-    }
-
-    /**
-     * 지정 날짜 기준 6개 카테고리 수집.
-     * 0건이면 공휴일로 간주하고 빈 리스트 반환 (호출자가 날짜 변경 후 재시도).
-     */
     private List<KamisPriceDto> fetchForDate(LocalDate date) {
-        String regday = date.format(KAMIS_DATE_FMT);
-        List<KamisPriceDto> all = new ArrayList<>();
-        for (String cat : CATEGORY_CODES) {
-            String xml = fetchXml(cat, regday);
+        var all = new ArrayList<KamisPriceDto>();
+        for (String category : CATEGORIES) {
+            String xml = fetchXml(category, date.toString());
             if (xml == null || xml.isBlank()) continue;
-            try {
-                List<KamisPriceDto> parsed = parseXml(xml);
-                log.info("[KAMIS-API] {} category={} parsed={}", regday, cat, parsed.size());
-                all.addAll(parsed);
-            } catch (Exception e) {
-                log.error("[KAMIS-API] parse error category={} regday={}", cat, regday, e);
-            }
+            var parsed = parseXml(xml, date);
+            log.info("[KAMIS-API] date={} category={} usable={}", date, category, parsed.size());
+            all.addAll(parsed);
         }
         return all;
     }
 
-    /**
-     * 모든 카테고리 합쳐서 DTO 리스트로 반환. Reader 가 사용.
-     *
-     * 날짜 결정 전략:
-     *   1) 어제부터 시작, 주말은 스킵
-     *   2) 0건이면 공휴일로 간주 → 하루 더 뒤로 (최대 10일)
-     *   → 연휴 직후에도 가장 최근 데이터를 자동으로 수집
-     */
     public List<KamisPriceDto> fetchAllCategories() {
-        // sim, 2026-10-12 — KAMIS 는 당일 가격을 그날 밤에 업데이트하므로 "오늘-2일" 부터 조회해야
-        //   dpr1(당일가)이 비어있지 않은 가장 최근 평일 데이터를 받는다.
-        LocalDate candidate = prevWeekday(LocalDate.now().minusDays(2));
-
-        for (int attempt = 1; attempt <= 10; attempt++) {
-            log.info("[KAMIS-API] 조회 기준일: {} ({}) [{}회차]",
-                    candidate.format(KAMIS_DATE_FMT), candidate.getDayOfWeek(), attempt);
-
-            List<KamisPriceDto> result = fetchForDate(candidate);
-
-            if (!result.isEmpty()) {
-                log.info("[KAMIS-API] total parsed: {} ({})", result.size(), candidate.format(KAMIS_DATE_FMT));
-                return result;
-            }
-
-            log.info("[KAMIS-API] {} 데이터 없음 (공휴일/미게시) → 이전 평일 재시도", candidate.format(KAMIS_DATE_FMT));
+        LocalDate candidate = prevWeekday(LocalDate.now(clock).minusDays(1));
+        for (int attempt = 0; attempt < 10; attempt++) {
+            var result = fetchForDate(candidate);
+            if (!result.isEmpty()) return result;
             candidate = prevWeekday(candidate.minusDays(1));
         }
-
-        log.warn("[KAMIS-API] 10일 이내 데이터 없음 — 빈 리스트 반환");
-        return List.of();
+        throw new IllegalStateException("KAMIS: 최근 10평일에 날짜를 확인할 수 있는 가격 자료가 없습니다");
     }
 
-    /** @deprecated 단일 카테고리만 받던 옛 메서드. fetchAllCategories() 사용 권장. */
-    @Deprecated
-    public String fetchXml() {
-        return fetchXml("100");
-    }
-
-    public List<KamisPriceDto> fetchDailySales() {
+    private List<KamisPriceDto> parseXml(String xml, LocalDate requested) {
         try {
-            String xml = fetchXml();
-            if (xml == null || xml.isBlank()) return new ArrayList<>();
-
-            List<KamisPriceDto> parsed = parseXml(xml);
-            log.info("[KAMIS-API] parsed {} items", parsed.size());
-            return parsed;
-        } catch (Exception e) {
-            log.error("[KAMIS-API] error while fetching daily sales", e);
-            return new ArrayList<>();
+            var factory = DocumentBuilderFactory.newInstance();
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            var document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            var nodes = document.getElementsByTagName("data");
+            if (nodes.getLength() == 0) throw new IllegalStateException("KAMIS 응답에 data가 없습니다");
+            var data = (Element) nodes.item(0);
+            String error = text(data, "error_code");
+            if ("200".equals(error)) return List.of();
+            if (!"000".equals(error)) throw new IllegalStateException("KAMIS 응답 오류: " + error);
+            var items = data.getElementsByTagName("item");
+            var result = new ArrayList<KamisPriceDto>();
+            for (int i = 0; i < items.getLength(); i++) {
+                var item = (Element) items.item(i);
+                var dto = new KamisPriceDto();
+                dto.setItemCode(text(item, "item_code"));
+                dto.setProductName(text(item, "item_name"));
+                if (dto.getProductName() == null || dto.getProductName().isBlank()) continue;
+                dto.setKindCode(text(item, "kind_code"));
+                dto.setKindName(text(item, "kind_name"));
+                dto.setRankCode(text(item, "rank_code"));
+                dto.setGrade(text(item, "rank"));
+                dto.setUnit("kg");
+                dto.setPriceBasis("02".equals(productClass) ? "WHOLESALE" : "RETAIL");
+                dto.setRequestedDate(requested);
+                dto.setDpr1(price(text(item, "dpr1")));
+                dto.setDpr2(price(text(item, "dpr2")));
+                dto.setDpr4(price(text(item, "dpr4")));
+                LocalDate firstDate = absoluteDate(text(item, "day1"), requested);
+                if (dto.getDpr1() != null) {
+                    dto.setCurrentPrice(dto.getDpr1());
+                    dto.setObservedDate(firstDate == null ? requested : firstDate);
+                } else {
+                    // '1일전'을 달력 하루 전이라고 추측하지 않는다. 실제 날짜가 있어야 대체 가능.
+                    LocalDate previous = absoluteDate(text(item, "day2"), requested);
+                    if (dto.getDpr2() == null || previous == null) continue;
+                    dto.setCurrentPrice(dto.getDpr2());
+                    dto.setObservedDate(previous);
+                }
+                if (!dto.getObservedDate().isAfter(requested)) result.add(dto);
+            }
+            return result;
+        } catch (IllegalStateException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IllegalStateException("KAMIS XML 해석 실패: " + failure.getClass().getSimpleName());
         }
     }
 
-    private List<KamisPriceDto> parseXml(String xml) throws Exception {
-        List<KamisPriceDto> list = new ArrayList<>();
-
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document document = builder.parse(new InputSource(new StringReader(xml)));
-
-        NodeList dataNodes = document.getElementsByTagName("data");
-        if (dataNodes.getLength() == 0) return list;
-
-        Element data = (Element) dataNodes.item(0);
-        String error = getTagText(data, "error_code");
-        if (!"000".equals(error)) {
-            log.warn("[KAMIS-API] error_code={} (비정상 응답, 빈 리스트 반환)", error);
-            return list;
-        }
-
-        NodeList items = data.getElementsByTagName("item");
-
-        for (int i = 0; i < items.getLength(); i++) {
-            Element e = (Element) items.item(i);
-
-            KamisPriceDto dto = new KamisPriceDto();
-            dto.setItemCode(getTagText(e, "item_code"));
-            dto.setProductName(getTagText(e, "item_name"));
-            dto.setUnit(getTagText(e, "unit"));
-            dto.setDpr1(normalize(getTagText(e, "dpr1")));
-            dto.setDpr2(normalize(getTagText(e, "dpr2")));
-            dto.setDpr4(normalize(getTagText(e, "dpr4")));
-
-            if (isBlank(dto.getProductName())) continue;
-
-            list.add(dto);
-        }
-
-        return list;
+    private LocalDate absoluteDate(String value, LocalDate requested) {
+        if (value == null) return null;
+        var match = ABSOLUTE_DATE.matcher(value);
+        if (!match.find()) return null;
+        try {
+            int year = match.group(1) == null ? requested.getYear() : Integer.parseInt(match.group(1));
+            LocalDate date = LocalDate.of(year, Integer.parseInt(match.group(2)), Integer.parseInt(match.group(3)));
+            if (match.group(1) == null && date.isAfter(requested)) date = date.minusYears(1);
+            return date;
+        } catch (RuntimeException failure) { return null; }
     }
 
-    private String getTagText(Element parent, String tagName) {
-        NodeList list = parent.getElementsByTagName(tagName);
-        if (list.getLength() == 0) return null;
-        return list.item(0).getTextContent().trim();
+    private String text(Element parent, String name) {
+        var nodes = parent.getElementsByTagName(name);
+        return nodes.getLength() == 0 ? null : nodes.item(0).getTextContent().trim();
     }
 
-    private String normalize(String v) {
-        if (v == null || v.isBlank() || v.equals("-")) return null;
-        return v.replace(",", "").trim();
+    private String price(String value) {
+        if (value == null || value.isBlank() || "-".equals(value.trim())) return null;
+        try {
+            var amount = new BigDecimal(value.replace(",", "").trim());
+            return amount.signum() > 0 ? amount.stripTrailingZeros().toPlainString() : null;
+        } catch (NumberFormatException failure) { return null; }
     }
 
-    private boolean isBlank(String s) {
-        return s == null || s.isBlank();
+    private String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
+    @Deprecated public String fetchXml(String category) {
+        return fetchXml(category, prevWeekday(LocalDate.now(clock).minusDays(1)).format(DateTimeFormatter.ISO_DATE));
     }
+    @Deprecated public String fetchXml() { return fetchXml("100"); }
+    @Deprecated public List<KamisPriceDto> fetchDailySales() { return fetchAllCategories(); }
 }

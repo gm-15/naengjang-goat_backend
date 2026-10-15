@@ -9,7 +9,7 @@
 
 ## 실행
 
-Java 21, Node 24, MySQL 8, Redis가 필요합니다. 저장소 루트에서 DB/Redis를 먼저 실행하고 Spring을 켭니다. 기존 DB를 사용하면 Flyway V010까지 적용됩니다. V010은 중복 FCM 토큰의 가장 큰 사용자 ID만 연결을 유지하므로 다른 사용자의 앱은 재실행해 토큰을 등록합니다.
+Java 21, Node 24, MySQL 8, Redis가 필요합니다. 저장소 루트에서 DB/Redis를 먼저 실행하고 Spring을 켭니다. 기존 DB를 사용하면 Flyway V011까지 적용됩니다. V010은 중복 FCM 토큰의 가장 큰 사용자 ID만 연결을 유지하므로 다른 사용자의 앱은 재실행해 토큰을 등록합니다. V011은 기존 KAMIS 가격을 LEGACY로 보존·분리하므로 재수집 전에는 비교 가격이 비어 있을 수 있습니다. [가격 수정·적재 확인 안내](KAMIS_PRICE_FIX.md)를 함께 확인하세요.
 
 ```bash
 docker compose up -d mysql redis
