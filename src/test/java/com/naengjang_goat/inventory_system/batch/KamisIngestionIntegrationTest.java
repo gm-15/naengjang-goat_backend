@@ -133,6 +133,18 @@ class KamisIngestionIntegrationTest {
         assertThat(calculator.buildKamis(cabbageA.getId()).getCurrentPricePerKg()).isEqualTo(2500);
     }
 
+    @Test void mixedCodeAndNameMappingIncludesUnconfiguredOwnersButRespectsConflictingCodes() throws Exception {
+        cabbageB.setKamisItemCode(null);
+        ingredients.save(cabbageB);
+        assertThat(launcher.run(job, parameters()).getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        assertThat(trustedCount()).isEqualTo(2);
+        jdbc.update("DELETE FROM market_price WHERE ingredient_id=?", cabbageB.getId());
+        cabbageB.setKamisItemCode("212");
+        ingredients.save(cabbageB);
+        assertThat(launcher.run(job, parameters()).getStatus()).isEqualTo(BatchStatus.COMPLETED);
+        assertThat(trustedCount()).isEqualTo(1);
+    }
+
     @Test void switchingRetailAndWholesaleDoesNotOverwriteOrAverageDifferentChannels() throws Exception {
         assertThat(launcher.run(job, parameters()).getStatus()).isEqualTo(BatchStatus.COMPLETED);
         try {

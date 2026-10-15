@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.item.ItemProcessor;
@@ -26,10 +27,14 @@ public class KamisPriceProcessor implements ItemProcessor<KamisPriceDto, List<Ma
                 || !("WHOLESALE".equals(dto.getPriceBasis()) || "RETAIL".equals(dto.getPriceBasis()))) {
             return null;
         }
-        var matches = dto.getItemCode() == null || dto.getItemCode().isBlank()
-                ? List.<com.naengjang_goat.inventory_system.inventory.domain.Ingredient>of()
-                : ingredients.findAllByKamisItemCode(dto.getItemCode());
-        if (matches.isEmpty()) matches = ingredients.findAllByName(dto.getProductName());
+        boolean hasCode = dto.getItemCode() != null && !dto.getItemCode().isBlank();
+        var matches = new ArrayList<>(hasCode
+                ? ingredients.findAllByKamisItemCode(dto.getItemCode())
+                : List.<com.naengjang_goat.inventory_system.inventory.domain.Ingredient>of());
+        // 한 점주의 코드 매칭 성공 때문에 다른 점주의 미등록 코드 재료를 누락하지 않는다.
+        matches.addAll(ingredients.findAllByName(dto.getProductName()).stream()
+                .filter(i -> !hasCode || i.getKamisItemCode() == null || i.getKamisItemCode().isBlank())
+                .toList());
         if (matches.isEmpty()) return null;
         String key = observationKey(dto);
         return matches.stream().map(ingredient -> {
