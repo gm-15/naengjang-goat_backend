@@ -35,3 +35,30 @@ export async function getPriceTrend(
     `/prices/${ingredientId}/trend?days=${days}`,
   );
 }
+
+export type BuySignalCategory =
+  | "VEGETABLES"
+  | "LIVESTOCK"
+  | "SEAFOOD"
+  | "FRUITS"
+  | "GRAINS"
+  | "PROCESSED";
+
+export type BuySignalToday = {
+  ingredientId: number;
+  ingredientName: string;
+  category: BuySignalCategory;
+  monthAvg: number;
+  currentPrice: number;
+  dropPercent: number;
+};
+
+/**
+ * GET /prices/buy-signal/today — 오늘의 할인률 Top 1 재료 (없으면 null)
+ */
+export async function getBuySignalToday(): Promise<BuySignalToday | null> {
+  const res = await apiClient.get<BuySignalToday | undefined>(
+    "/prices/buy-signal/today",
+  );
+  return res ?? null;
+}

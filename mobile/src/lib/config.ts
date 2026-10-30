@@ -9,7 +9,7 @@ import { storage } from "./storage";
  * Android 에뮬레이터라면 http://10.0.2.2:8080
  */
 export const DEFAULT_API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.0.10:8080";
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export function getApiBaseUrl(): string {
   return storage.get("api_base_url") ?? DEFAULT_API_BASE_URL;

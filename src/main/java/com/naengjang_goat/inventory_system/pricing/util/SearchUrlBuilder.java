@@ -18,23 +18,24 @@ public final class SearchUrlBuilder {
 
     private SearchUrlBuilder() {}
 
-    private static final String NAVER_BASE        = "https://search.shopping.naver.com/search/all";
+    // 통합 검색의 쇼핑 탭 사용: shopping.naver.com 직접은 봇 감지로 로그인 리다이렉트됨
+    private static final String NAVER_BASE        = "https://search.naver.com/search.naver";
     private static final String SIKJAJAEWANG_BASE = "https://www.ewangmart.com/goods/search.do";
 
-    /** 네이버 검색 URL — 업소용 키워드 자동 삽입 + 저가순. */
+    /** 네이버 통합검색 쇼핑탭 — 업소용 키워드 자동 삽입. */
     public static String naverSearchUrl(String ingredientName) {
         return UriComponentsBuilder.fromUriString(NAVER_BASE)
+                .queryParam("where", "shop")
                 .queryParam("query", ingredientName + " 업소용")
-                .queryParam("sort", "price_asc")
                 .build()
                 .encode()
                 .toUriString();
     }
 
-    /** 식자재왕 검색 URL — B2B 사이트라 키워드 단독. */
+    /** 식자재왕 검색 URL — 파라미터명이 'sword' (사이트 리뉴얼 후 keyword 는 무시됨). */
     public static String sikjajaewangSearchUrl(String ingredientName) {
         return UriComponentsBuilder.fromUriString(SIKJAJAEWANG_BASE)
-                .queryParam("keyword", ingredientName)
+                .queryParam("sword", ingredientName)
                 .build()
                 .encode()
                 .toUriString();

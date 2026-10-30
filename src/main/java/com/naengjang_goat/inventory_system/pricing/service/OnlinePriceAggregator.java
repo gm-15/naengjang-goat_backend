@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 여러 소스의 최신 PriceRecord 를 OnlinePriceDto 리스트로 머지하고 isLowest 마크.
@@ -93,10 +94,22 @@ public class OnlinePriceAggregator {
         return dtos;
     }
 
-    /** "식자재왕_채소/과일" → "식자재왕". UI 표기용. */
+    /**
+     * UI 표기용 라벨. "식자재왕_채소/과일" → "식자재왕".
+     * 외부 크롤러가 영문으로 넣는 소스는 한글로 치환.
+     */
+    private static final Map<String, String> KOREAN_LABEL = Map.of(
+            "NAVER_SHOPPING", "네이버",
+            "NAVER", "네이버",
+            "COUPANG", "쿠팡",
+            "SIKJAJAEWANG", "식자재왕"
+    );
+
     private String extractLabel(String source) {
         if (source == null) return "";
+        if (KOREAN_LABEL.containsKey(source)) return KOREAN_LABEL.get(source);
         int idx = source.indexOf('_');
-        return idx > 0 ? source.substring(0, idx) : source;
+        String base = idx > 0 ? source.substring(0, idx) : source;
+        return KOREAN_LABEL.getOrDefault(base, base);
     }
 }

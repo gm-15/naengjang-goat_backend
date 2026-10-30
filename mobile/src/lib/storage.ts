@@ -13,6 +13,7 @@ const KEYS = [
   "handled_notification_ids",
   "pending_notification",
   "registered_fcm_connection",
+  "buy_signal_dismissed_date",
 ] as const;
 export type StorageKey = (typeof KEYS)[number];
 

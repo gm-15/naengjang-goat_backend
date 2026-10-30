@@ -1,9 +1,11 @@
 package com.naengjang_goat.inventory_system.pricing.controller;
 
 import com.naengjang_goat.inventory_system.global.security.CustomUserDetails;
+import com.naengjang_goat.inventory_system.pricing.dto.BuySignalTodayDto;
 import com.naengjang_goat.inventory_system.pricing.dto.LowestTopItemDto;
 import com.naengjang_goat.inventory_system.pricing.dto.PriceDetailDto;
 import com.naengjang_goat.inventory_system.pricing.dto.PriceTrendResponse;
+import com.naengjang_goat.inventory_system.pricing.service.BuySignalTodayService;
 import com.naengjang_goat.inventory_system.pricing.service.LowestTopService;
 import com.naengjang_goat.inventory_system.pricing.service.PriceDetailService;
 import com.naengjang_goat.inventory_system.pricing.service.PriceTrendService;
@@ -32,6 +34,7 @@ public class PriceController {
     private final LowestTopService lowestTopService;
     private final PriceDetailService priceDetailService;
     private final PriceTrendService priceTrendService;
+    private final BuySignalTodayService buySignalTodayService;
 
     @GetMapping("/lowest-top")
     public ResponseEntity<List<LowestTopItemDto>> lowestTop(
@@ -58,5 +61,16 @@ public class PriceController {
             @RequestParam(defaultValue = "30") int days) {
         int effectiveDays = Math.min(Math.max(days, 1), 90);
         return ResponseEntity.ok(priceTrendService.getTrend(ingredientId, effectiveDays));
+    }
+
+    /**
+     * 홈 모달용 — 오늘 평소보다 싼 재료 Top 1.
+     * 결과 없으면 204.
+     */
+    @GetMapping("/buy-signal/today")
+    public ResponseEntity<BuySignalTodayDto> buySignalToday(
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        BuySignalTodayDto dto = buySignalTodayService.findTop(principal.getId());
+        return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.noContent().build();
     }
 }

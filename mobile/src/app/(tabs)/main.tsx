@@ -1,17 +1,38 @@
+import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { authStorage } from "../../lib/auth-storage";
+import { storage } from "../../lib/storage";
 import { useLogout } from "../../hooks/useAuth";
 import { PurchaseSummaryCard } from "../../components/PurchaseSummaryCard";
+import { BuySignalModal } from "../../components/BuySignalModal";
 import { C } from "../../components/theme";
 import { Card, IconTile, Screen, s, type IconName } from "../../components/ui";
+import { getBuySignalToday, type BuySignalToday } from "../../api/prices";
 
 export default function MainScreen() {
   const qc = useQueryClient();
   const username = authStorage.getUsername();
   const logoutMutation = useLogout();
+  const [buySignal, setBuySignal] = useState<BuySignalToday | null>(null);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (storage.get("buy_signal_dismissed_date") === today) return;
+    getBuySignalToday()
+      .then((signal) => {
+        if (signal) setBuySignal(signal);
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissBuySignal = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    storage.set("buy_signal_dismissed_date", today);
+    setBuySignal(null);
+  };
 
   const logout = () =>
     Alert.alert("로그아웃", "로그아웃 하시겠습니까?", [
@@ -53,6 +74,8 @@ export default function MainScreen() {
         <ServiceCard icon="clipboard-outline" title="발주·배송 관리" desc="발주 판단 확인과 배송 수령 후 입고" onPress={() => router.navigate("/order")} />
         <ServiceCard icon="bar-chart-outline" title="일일 운영" desc="POS 판매 엑셀 반영과 하루 운영 리포트" onPress={() => router.navigate("/operations")} />
       </View>
+
+      <BuySignalModal visible={buySignal !== null} signal={buySignal} onDismiss={dismissBuySignal} />
     </Screen>
   );
 }

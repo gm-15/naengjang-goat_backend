@@ -68,7 +68,10 @@ public class PurchaseOrderService {
                 if(!java.util.Set.of("https","http").contains(uri.getScheme()) || uri.getHost()==null) throw new IllegalArgumentException("상품 링크 형식을 확인하세요");
             }
         } catch(IllegalArgumentException e) {throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,e.getMessage());}
-        BigDecimal totalAmount = request.getQuantity().multiply(request.getUnitPrice());
+        // unitPrice는 사용자가 입력한 수량 단위(baseUnit) 기준 가격. 그대로 곱한다.
+        BigDecimal totalAmount = request.getQuantity()
+                .multiply(request.getUnitPrice())
+                .setScale(2, java.math.RoundingMode.HALF_UP);
         if(totalAmount.compareTo(new BigDecimal("9999999999.99"))>0) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"총금액 범위 초과");
         LocalDate orderedAt = request.getOrderedAt() != null ? request.getOrderedAt() : LocalDate.now(clock);
 
