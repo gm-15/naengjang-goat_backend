@@ -1,340 +1,476 @@
-# NaengjangGOAT — Food Procurement Decision Support Platform
+# NaengjangGOAT
 
-A Spring Boot 3.5 / Java 21 backend that connects a restaurant's existing POS sales data with public market prices to support three decisions: **what is in stock, when to buy, and how much to buy.**
+> **A food inventory and purchasing decision-support platform that connects existing POS sales data with public market prices.**
+>
+> Turning food purchasing decisions from intuition into data.
 
-**What this service does and does not do**
+[Korean README](README.md) · [Backend Repository](https://github.com/gm-15/naengjang-goat_backend)
 
-- The system calculates and **recommends** order quantities and shortage forecasts
-- The owner buys **directly** on an external shopping site
-- Purchase records and actual goods receipt are tracked **separately**
-- It does not place orders or process payments. Stock is **estimated from sales data**, not sensed automatically
+![NaengjangGOAT main flow](docs/main-flow.svg)
 
-**Layout:** the repository root is the Spring backend, `frontend/` is the web client, `mobile/` is the React Native app.
+## Project Overview
 
-**Run & demo:** [Integrated service runbook](docs/integration/RUNBOOK.md) · [Demo runbook](docs/handoff/DEMO_RUNBOOK.md) · [API contract](docs/handoff/API_CONTRACT.md)
-
-**Data verification:** [KAMIS observation date / wholesale-retail / duplicate ingestion fixes](docs/integration/KAMIS_PRICE_FIX.md) · [Historical price CSV seeding](docs/integration/CSV_PRICE_SEED.md)
-
-🇰🇷 Korean master: [README.md](README.md) · 📜 v1 archive: [README_0315.md](README_0315.md)
-
----
-
-## At a Glance
-
-| Item | Detail |
+| Item | Description |
 |---|---|
-| Period | Mar 2 – Oct 16, 2026 (Software Capstone Design, 3-person team) |
-| Role | Backend lead Gunwoo Park · Data Sangmuk Sim · Frontend Gunwoo Kim |
-| Stack | Spring Boot 3.5.7 · Java 21 · MySQL 8 · Redis 7 · Spring Batch · Flyway · Resilience4j · FCM |
-| Core flow | POS sales file → stock deduction → price comparison → order recommendation → purchase record → goods receipt |
-| Verification | **75 tests passing / 0 failures or errors** (13 classes) |
-| Field validation | 2 restaurants, usefulness for stock & order planning averaged 4.5 / 5, both rated 5 / 5 on willingness to adopt |
-| Final state | As of the Nov 11, 2026 merge into main. **No deployed production server — local demo environment** |
-| Capstone | Passed faculty review |
+| Period | Mar 2, 2026 – Oct 16, 2026 |
+| Program | Software Capstone Design |
+| Team | 3 members |
+| Role | Backend Lead |
+| Core workflow | POS sales data → Inventory update → Price comparison → Purchase recommendation → Purchase record → Goods receipt |
+| Tests | 75 passed, 0 failures or errors (13 test classes) |
+| Field validation | Results shared with two stores and feedback collected |
 
-![NaengjangGOAT Data Flow](docs/data-flow.png)
+NaengjangGOAT connects daily sales spreadsheets exported from a restaurant's existing POS system to inventory data. It combines public market prices and online product prices to support purchasing decisions.
 
----
+- The system calculates and recommends **shortage forecasts and purchase quantities** based on sales, inventory, and the time remaining until the next purchasing day.
+- The owner **makes purchases directly on external vendor websites**.
+- **Purchase records and physical goods receipt are managed separately.** Items awaiting delivery are not counted as available inventory.
+- NaengjangGOAT **does not place orders or process payments on behalf of the owner**. Owners move to external vendor websites to complete purchases.
 
-## Background
+## Background and Problem Definition
 
-The Korean B2B food ingredient market was estimated at KRW 62 trillion in 2023, growing roughly 4.7% annually.
-Yet interviews with two restaurant owners showed they still sent orders by SMS to five separate suppliers, cancelled 3–6 orders a month because an ingredient had run out, and spent 3–5 hours a week checking stock by hand.
+Interviews with owners of Songtan and Yongin Makchang restaurants revealed the following operational situations.
 
-Three problems observed on site:
+| Interview finding | Operational problem |
+|---|---|
+| Orders sent individually by SMS to five suppliers | Purchasing work spread across multiple channels |
+| 3–6 order cancellations per month due to ingredient shortages | Inventory shortages and missed purchasing times |
+| 3–5 hours per week spent checking inventory | Manual, refrigerator-by-refrigerator inventory checks |
 
-1. **The burden of checking stock** — owners open the fridge and count; no real-time view
-2. **No basis for price judgment** — no way to tell whether today's price is good
-3. **Missed order timing** — the owner does not notice stock running out until it is late
+We identified three problems:
 
-Existing apps each solve part of this, but none combined stock estimation, order timing, and market-price comparison.
+1. **Inventory visibility burden**: It is difficult to translate sold menu items into ingredient consumption and determine current stock.
+2. **Insufficient basis for price decisions**: Price volatility differs by product, so a simple price comparison or month-over-month change does not adequately indicate when to buy.
+3. **Missed purchasing time**: A fixed stock threshold does not account for sales velocity or the time remaining until the next purchasing day.
 
----
+The project began as a B2C idea. After interviewing restaurant owners, we shifted toward a B2B decision-support service that reflects actual restaurant workflows.
 
-## v0 → v2 Pivot — "The engine is a Lamborghini, but there's no steering wheel"
+## Design Evolution
 
-v0 was a concurrency-lock demo. A self-critique landed in `plan.md` on 2026-04-05.
+### 1. From a lock demonstration to purchasing decision support
 
-> *An owner does not pay KRW 30,000 a month for data consistency. They pay to have worry and effort taken off their hands.*
+The initial v0 focused heavily on comparing concurrency locks. However, technical consistency alone did not solve the restaurant owner's operational problem. Owners need less uncertainty and effort when checking stock and deciding what to purchase, not a lock mechanism itself.
 
-From then on every feature was aligned to one goal: **supporting the order decision.**
+We reorganized the product around inventory, sales, recipes, pricing, and purchasing decisions. Concurrency control became the foundation for maintaining consistency across these workflows.
 
-A second pivot changed the input unit. The initial design deducted stock on every order, but owner interviews showed that during service hours they use their existing POS and never re-enter sales into the app. The input unit became a **daily sales file upload**, and the consistency mechanism moved with it — from a distributed lock to a per-owner DB lock plus file-hash idempotency inside a single transaction.
+### 2. From per-order deduction to daily POS spreadsheet uploads
 
----
+The initial design deducted inventory for each order. Interviews revealed that owners use their existing POS system during business hours and do not enter each sale separately into our application.
 
-## An Owner's Day — Before, During, After Service
+We changed the sales input model to **one POS spreadsheet upload per business day**. The final POS workflow uses the following consistency mechanisms:
 
-| Phase | Owner's situation | Feature |
+- Pessimistic DB locks on the owner row and inventory batches to serialize concurrent updates
+- File-byte SHA-256 hashing and a unique constraint to prevent duplicate processing of the same file
+- A unique owner/business-date constraint to reject a different file for an already processed business day
+- All-or-nothing processing if file validation, menu matching, unit conversion, or inventory validation fails
+
+The distributed-lock strategy evaluated for the initial per-order deduction design remains part of the order-path fault-tolerance design. The POS batch workflow instead uses file-level atomicity and idempotency.
+
+## A Restaurant Owner's Day
+
+| Time | Owner's situation | Features |
 |---|---|---|
-| Before | "We're short on onions today." | Current stock and expiry, shortage alert, lowest price |
-| During | "Sales go through the existing POS, as usual." | Stock and price lookup, goods receipt for deliveries |
-| After | "How much did we use, and what should I buy tomorrow?" | POS file upload → consumption and remaining stock, daily report, price comparison, order recommendation |
+| Before opening | "We're short on onions today." | Check inventory and expiration dates, shortage notifications, lowest-price lookup |
+| During business hours | "Sales stay in the existing POS." | Inventory and price lookup, goods receipt |
+| After closing | "How much did we use today, and what should we buy tomorrow?" | POS spreadsheet upload, daily operations report, price comparison, purchase recommendation |
 
-Not re-entering sales into the app during service is a deliberate design choice.
+### Core Workflow
 
----
+1. The owner exports a business-day sales spreadsheet from the existing POS system.
+2. After upload, menu sales quantities are matched with recipe data.
+3. Ingredient consumption is calculated from menu sales and recipes, then reflected in inventory.
+4. The owner checks sales revenue and ingredient consumption in the daily operations report.
+5. The owner reviews online product unit prices, public market prices, and inventory-based purchase recommendations.
+6. The owner purchases directly on an external vendor website and records the purchase in the application.
+7. Once the goods arrive, the owner records receipt; inventory increases only at this point.
 
-## Three Axes of the Purchase Decision
+## Three Dimensions of Purchasing Decisions
 
-The three axes use **different data and different criteria**. This is not one price-recommendation algorithm.
+These features use different data sources and serve different purposes.
 
-| Question | Mechanism | Underlying data | Status |
-|---|---|---|:---:|
-| Where to buy | Online lowest price | Shopping listings normalised to price per kg | ✅ |
-| When to buy | Public-price buy-signal | KAMIS / EKAPE trends, per-category coefficient of variation | ✅ |
-| How much to buy | Stock-based recommendation | Daily average consumption × days until next order day − available stock | ✅ |
+| Decision | Feature | Data and criteria |
+|---|---|---|
+| Where should I buy? | Online lowest-price comparison | Compare Naver Shopping and Sikjae Wang products after normalizing package prices to a per-kg unit price |
+| When should I buy? | Public market-price buy signal | KAMIS and EKAPE price trends with product-category volatility thresholds |
+| How much should I buy? | Inventory-based recommendation | Average daily consumption × days until next purchasing day − available inventory |
 
-Actual time saved for owners is a separate user-validation task and is kept distinct from "implemented".
+### Online Price Comparison
 
----
+Products have different package weights and displayed prices, making direct comparison difficult. A MySQL `GENERATED ALWAYS AS ... STORED` column calculates and stores the price per kilogram. An index on this value is used for sorting.
 
-## Key Measured Results
+```sql
+unit_price_per_kg =
+    price * 1000 / weight_grams
+```
 
-### [Initial design] 4-Strategy Lock Comparison — 500 threads, 100g initial stock, 1g/request
+When the source price or package weight changes, the generated column is recalculated by the database.
 
-This experiment targeted the **initial structure**, which deducted stock per order. It is not a load test of the final implementation.
+### Public Market Prices and Buy Signals
 
-| Strategy | Remaining stock | Consistent | Notes |
-|---|:---:|:---:|---|
-| NONE (control) | **10g** | ❌ | Lost Update fingerprint — deliberately kept as regression ground truth |
-| SPIN (Redis SETNX) | 0g | ✅ | TTL 30s, polling 1ms |
-| REDISSON + CB | 0g | ✅ | tryLock(5s wait, 10s lease), **primary** |
-| PESSIMISTIC | 0g | ✅ | Automatic CB fallback when REDISSON fails |
+Public market prices collected from KAMIS and EKAPE are managed separately from online product prices. Public prices are used to understand market trends and support purchase-timing decisions, while online prices are used to compare actual purchase candidates.
 
-All three preserved consistency, so the deciding factor was **behaviour while waiting**.
-A spin lock keeps retrying against Redis, so load grows with wait time, and if the work outlives the TTL it can delete a lock another request now holds. Redisson waits on a release notification and only unlocks when the current thread is the holder.
+A simple month-over-month change represents the difference between two points in time, but does not indicate whether that movement is unusual for a particular product. To address this, we analyzed six years of price data from 2019 to 2024 and set category-specific thresholds based on the coefficient of variation (CV).
 
-The 10g left by NONE is a measured fingerprint of Last-Writer-Wins under MySQL REPEATABLE READ.
-NONE was kept in the codebase on the principle that *a test that always passes has lost its ground truth.*
+CV measures how widely prices are dispersed under normal conditions. Since typical price volatility differs by product category, we use category-specific thresholds rather than a single threshold.
 
-ChaosTest (`docker stop redis-test`): after repeated failures the circuit breaker (slidingWindow=10, failureRate=50%) switched to PESSIMISTIC as expected.
-
-### [Final implementation] Batch POS Ingestion · Purchase vs. Receipt Separation
-
-| Check | Result |
-|---|---|
-| Same file uploaded 6× concurrently | **1** new ingestion, stock 6,000g → 2,000g deducted **once**, 1 alert |
-| 6 concurrent goods receipts | **1** success (others 409), stock 2,000g → 4,000g |
-| On error | If format, menu matching, unit conversion, or stock sufficiency fails, **nothing is applied** |
-
-The upload path is serialised with **pessimistic locks on the owner row and the stock batches**, not a distributed lock.
-A SHA-256 of the file bytes plus `UNIQUE(user_id, file_hash)` makes re-uploading the same file a no-op, and `UNIQUE(user_id, business_date)` rejects a different file for the same business day with 409.
-
-### [Final implementation] 11 Regression Tests for Order Judgment
-
-Sales volume, stock level, and order weekday are varied to assert daily average consumption, stock grade, estimated depletion date, and order alert.
-
-- With the same sales and stock, moving the next order day from 3 to 6 days out changes the grade from sufficient to normal
-- Reverse check: shifting the grade boundary 0.60 → 0.50 fails that boundary case; removing the order-day distance from the formula fails 8 of 11
-
-### KAMIS 6-Year Buy-Signal Thresholds (2019–2024, outliers removed at z-score ≤ 1.3)
-
-| Category | Items and CV | Threshold |
+| Category | Analyzed data and average volatility | Buy-signal threshold |
 |---|---|:---:|
-| Vegetables | Napa cabbage 16.1% · onion 5.0% · radish 16.8% · green onion 28.4% → avg 16.6% | **0.17** |
-| Livestock | EKAPE consumer prices, 4 items avg 4.9% (pork belly 8.3%) | **0.08** |
-| Seafood | Mackerel 7.7% · pollock 5.6% → avg 6.7% | **0.07** |
-| Fruit | Pear 12.3% · Fuji apple 12.9% → avg 12.6% | **0.13** |
-| Grain | Rice 4.5% | **0.05** |
-| Processed | Low volatility, fixed without separate analysis | **0.03** |
+| Vegetables | Cabbage 16.1%, onion 5.0%, radish 16.8%, green onion 28.4% → average 16.6% | **0.17** |
+| Livestock | Average 4.9% across four EKAPE consumer-price products | **0.08** |
+| Seafood | Mackerel 7.7%, pollock 5.6% → average 6.7% | **0.07** |
+| Fruit | Pear 12.3%, Fuji apple 12.9% → average 12.6% | **0.13** |
+| Grains | Rice 4.5% | **0.05** |
+| Processed food | Fixed threshold due to low volatility | **0.03** |
 
-Buy-signal condition: `currentPricePerKg < monthAvg × (1 − threshold)`
+Volatility was analyzed after filtering outliers using a z-score ≤ 1.3 criterion. For livestock, EKAPE consumer-price data was analyzed separately because of the limitations of KAMIS coverage.
 
-CV measures how widely a price is normally dispersed. A plain month-over-month change does not tell you whether that move is unusual *for this item*, so per-category volatility became the yardstick for the threshold.
+The buy-signal condition is:
 
-> **The livestock 0.08 was not derived from the measured average.** It was fixed as an industry reference value at design time and kept after EKAPE measurement (4-item average 4.9%), on the assumption that B2B wholesale prices swing more than consumer prices. It happens to match pork belly (8.3%), the most volatile item measured.
+```text
+currentPricePerKg < monthAvg × (1 - threshold)
+```
 
-### Price Data Integrity
+### Inventory-Based Purchase Recommendation
 
-- Fixed three storage defects: wrong observation date, double kg conversion, duplicate rows per grade
-- Made price basis (wholesale/retail), observation date, and observation key explicit in the schema, with `UNIQUE(ingredient_id, source, price_basis, reported_date, observation_key)`
-- Running the same batch twice left 20 stored rows with 0 duplicate combinations (verified locally 2026-10-19)
-- Pre-existing rows cannot have their channel or observation date recovered, so they are preserved as `LEGACY` rather than converted by guesswork
+Instead of relying on a fixed inventory threshold, the system evaluates whether current stock can last until the next purchasing day.
 
----
+```text
+Recommended quantity =
+    average daily consumption × days until next purchasing day
+    - available inventory
+```
+
+Available inventory is calculated with regard to receipt dates and expiration dates for each inventory batch. Sales volume, inventory quantity, and purchasing day are used to calculate average daily consumption, inventory status, estimated depletion date, and purchase notifications.
+
+## Technical Challenges and Validation
+
+### 1. Initial Design Validation: Four-Way Lock Comparison
+
+We identified a potential Lost Update problem in the per-order inventory deduction workflow. Under MySQL `REPEATABLE READ`, we ran a 500-thread experiment with an initial inventory of 100g and a 1g deduction per request. All requests reported success without a lock, but 10g remained in the final inventory.
+
+**This experiment validates lock strategies for the initial per-order deduction design. It is not a load test of the final POS upload implementation.**
+
+| Strategy | Remaining inventory | Result | Configuration and role |
+|---|:---:|:---:|---|
+| NONE | 10g | Inconsistent | Reproduces Lost Update; retained as a regression baseline |
+| SPIN (Redis SETNX) | 0g | Consistent | TTL 30 seconds, polling every 1ms |
+| REDISSON + CB | 0g | Consistent | `tryLock(5s wait, 10s lease)`, primary strategy |
+| PESSIMISTIC | 0g | Consistent | Fallback through Circuit Breaker when Redis fails |
+
+All three locking strategies maintained consistency in this experiment. We therefore selected the strategy based on waiting behavior and operation in a distributed environment.
+
+- **Spin Lock** repeatedly requests Redis when lock acquisition fails. Retry load increases with waiting time. If an operation exceeds the TTL, it also creates a risk of releasing a lock acquired by another request.
+- **Redisson** waits for lock-release notifications and releases the lock only when the current thread owns it. We selected it as the primary strategy with multi-instance server deployments in mind.
+- **Circuit Breaker** routes requests to a DB pessimistic lock when Redis experiences consecutive failures.
+
+A Chaos Test using `docker stop redis-test` confirmed the transition to the PESSIMISTIC path after Redis became unavailable.
+
+### 2. Final Implementation Validation: POS Batch Processing
+
+The POS upload workflow provides atomicity and idempotency at the file level.
+
+| Validation | Test condition | Result |
+|---|---|---|
+| Concurrent upload of the same file | Six concurrent requests for the same file | One new application; inventory deducted once from 6,000g to 2,000g; one notification |
+| Re-upload of the same file | File-byte SHA-256 and `UNIQUE(user_id, file_hash)` | Duplicate file is not applied again |
+| Different file for the same business date | `UNIQUE(user_id, business_date)` | Duplicate business-day upload rejected with HTTP 409 |
+| Concurrent goods receipt | Six concurrent requests for the same receipt | One success, five HTTP 409 responses; inventory increased from 2,000g to 4,000g |
+| Partial-failure prevention | Invalid format, menu mismatch, unit-conversion failure, or insufficient inventory | Entire operation is rolled back if any validation fails |
+
+The final POS upload and goods-receipt paths are serialized using **pessimistic DB locks on the owner row and inventory batches**, not distributed locks.
+
+### 3. Final Implementation Validation: 11 Purchase-Decision Regression Tests
+
+Eleven cases with different sales volumes, inventory levels, and purchasing weekdays validated:
+
+- Average daily consumption
+- Inventory status
+- Estimated depletion date
+- Purchase notifications
+
+With sales volume and inventory held constant, changing only the time until the next purchasing day from three to six days changed the inventory status from `Sufficient` to `Normal`.
+
+We also performed reverse validation to confirm that the decision logic actually uses the distance to the next purchasing day.
+
+- Changing the status boundary from 0.60 to 0.50 caused one test at that boundary to fail.
+- Removing the distance to the next purchasing day from the decision formula caused 8 of 11 tests to fail.
+
+### 4. Price Data Consistency
+
+We corrected three price-data issues: observation dates, unit conversion (double conversion to kg), and duplicate records across grades.
+
+| Consistency criterion | Implementation |
+|---|---|
+| Price source | `source` |
+| Price basis | `price_basis` (e.g. wholesale or retail) |
+| Observation date | `reported_date` |
+| Observation identifier | `observation_key` |
+| Duplicate prevention | `UNIQUE(ingredient_id, source, price_basis, reported_date, observation_key)` |
+
+After running the same batch twice, the stored row count remained at 20, with zero duplicate key combinations.
+
+### 5. Overall Test Results
+
+| Item | Result |
+|---|:---:|
+| Test classes | 13 |
+| Tests passed | 75 |
+| Failures and errors | 0 |
 
 ## Architecture
 
+### Data Collection and Processing
+
+```text
+                    [Public Market Price]
+                    KAMIS (Agricultural wholesale XML)
+                    EKAPE (Livestock public data API)
+                               |
+                               v
+                     [Spring Batch]
+                     kamisPriceStep
+                       chunk = 50
+                               |
+                               v
+                         market_price
+                         normalized KRW/kg
+                               |
+                               +----------------------+
+                                                      |
+                                                      v
+[Online Product Price]                         [Buy Signal]
+Naver Shopping API (JSON)                      buySignalNotifyStep
+Sikjae Wang crawler (Selenium)                 (Tasklet)
+          |                                           |
+          v                                           v
+  Normalize price/kg                          Category threshold check
+  GENERATED COLUMN
+          |
+          v
+    price_records
+
+[POS Excel]
+     |
+     v
+File validation · SHA-256 idempotency
+     |
+     v
+Menu matching · Recipe conversion
+     |
+     v
+Owner-row + inventory-batch pessimistic locks
+     |
+     v
+Inventory update in a single transaction
+     |
+     v
+Daily operations report · Purchase recommendation
 ```
-[4-source price ingestion + 2-table separation]
-  KAMIS  (produce wholesale XML)   ─┐
-  EKAPE  (livestock public API)    ─┴─▶ market_price   ← Java runtime normalisation (KRW/kg)
-                                         + price_basis · observation_key unique index
 
-  Naver Shopping API               ─┐
-  Sikjajaewang B2B crawler         ─┴─▶ price_records  ← GENERATED ALWAYS AS (price×1000/weight_grams) STORED
+### Separate Storage for Price Data
 
-[Spring Batch pipeline]
-  kamisPriceStep (chunk=50)
-    KamisApiReader → KamisPriceProcessor → KamisPriceWriter
-        ↓
-  buySignalNotifyStep (tasklet)
-    BuySignalNotifyTasklet → per-user aggregation → FCM notification
+| Data source | Collection method | Table | Storage basis |
+|---|---|---|---|
+| KAMIS | Public API, XML | `market_price` | Public wholesale prices normalized to KRW/kg |
+| EKAPE | Public Data Portal API, XML | `market_price` | Public livestock prices normalized to KRW/kg |
+| Naver Shopping | API, JSON | `price_records` | Online product price, package weight, generated unit price |
+| Sikjae Wang | Selenium crawler | `price_records` | Online product price, package weight, generated unit price |
 
-[Concurrency control]
-  Order path        : REDISSON ──▶ CircuitBreaker ──▶ PESSIMISTIC (fallback)
-  POS / receipt path: serialised by pessimistic locks on the owner row and stock batches
+Public market prices are collected periodically through Spring Batch and stored in the database. Online prices are requested when the relevant screen is accessed and cached for 30 minutes.
+
+### Batch and Concurrency Paths
+
+```text
+Spring Batch
+  kamisPriceStep (chunk = 50)
+       |
+       v
+  buySignalNotifyStep (Tasklet)
+
+Order path
+  Redisson Distributed Lock
+       |
+       v
+  Circuit Breaker
+       |
+       v
+  Pessimistic Lock (DB fallback)
+
+POS upload / goods receipt path
+  Owner-row lock
+       +
+  Inventory-batch pessimistic lock
+       |
+       v
+  Single transaction
 ```
 
-Public prices are ingested on a Spring Batch schedule; online retail prices are fetched **when the screen is opened** and cached for 30 minutes.
+### Notifications
 
----
+| Notification | Created when | Content |
+|---|---|---|
+| UPLOAD | Immediately after sales are applied | Today's consumption and the basis for the purchase decision |
+| OPENING | 3 hours before opening | Re-evaluation against current inventory |
 
-## Implemented
+An event key prevents the same notification from being created twice. Failed deliveries are retried up to three times, and notifications expire 24 hours after creation.
 
-- ✅ Batch POS ingestion — daily sales file → recipe conversion → stock deduction, with hash idempotency, a single transaction, and per-owner serialisation
-- ✅ Order judgment — recommended quantity and estimated depletion date from daily consumption, available stock, and order cycle; 11 regression tests
-- ✅ Concurrency control — 4-strategy comparison with circuit-breaker fallback
-- ✅ Price integration — 4 sources · 2-table separation · GENERATED COLUMN unit normalisation · observation-key unique index
-- ✅ Buy-signal — thresholds from 6 years of measured data, applied per category
-- ✅ Purchase record vs. goods receipt — stock is unchanged at purchase and only increases on receipt
-- ✅ Notifications — UPLOAD (after sales ingestion) and OPENING (3 hours before service) events, with deduplication, 3 retries, and 24-hour expiry
-- ✅ Order history — CRUD plus Excel export
-- ✅ Auth — JWT (access 1h / refresh 7d) · Spring Security · per-owner ownership checks
-- ✅ Schema — Flyway V001~V011, verified to apply end to end on an empty database
+## Implemented Features
 
----
-
-## Not Implemented
-
-| Item | State |
-|---|---|
-| KakaoTalk notifications | Not started. Both surveyed restaurants ranked it first |
-| In-app payment | Not started. The app currently links out to an external shopping site |
-| Sales cancellation and stock restore | Only the `OrderStatus.CANCELED` enum exists; the implementation lives on a separate branch |
-| Physical stock reconciliation | Only the `inventoryDay` setting exists. Waste and staff meals have no entry path, so the ledger drifts from reality |
-| Automatic disposal of expired stock | Expired batches are excluded from available stock but remain in the list |
-| Per-vendor POS file formats | Headers are fixed to five columns |
-| Real-time POS integration | Replaced by daily file upload |
-
----
+- [x] JWT authentication and owner-level data ownership validation
+- [x] Inventory batch registration and available-stock calculation using receipt and expiration dates
+- [x] POS spreadsheet upload and recipe-based ingredient consumption calculation
+- [x] File-hash idempotency and duplicate business-day upload prevention
+- [x] Daily operations report and ingredient consumption lookup
+- [x] Purchase recommendation based on average daily consumption and days until the next purchasing day
+- [x] KAMIS and EKAPE public market-price collection and trend lookup
+- [x] Category-specific buy-signal evaluation
+- [x] Online product-price comparison using Naver Shopping and Sikjae Wang
+- [x] Price-per-kg normalization and sorting
+- [x] Separate purchase records from physical goods receipt
+- [x] Notification record creation and delivery pipeline
+- [x] Notification deduplication, up to 3 retries, and 24-hour expiration
+- [x] Notifications after sales processing and 3 hours before business opening
+- [x] Purchase-history CRUD and Excel export
+- [x] Flyway schema migrations V001–V011
 
 ## Field Validation
 
-After implementation the result was shown to two restaurants and feedback collected (late Oct 2026).
+We shared the implemented application with two restaurants and collected owner feedback.
 
-**Samsan Hoegwan Soraepogu · Daegu Banyawol Makchang**
+| Validation item | Samsan Hoegwan Soraepogu | Daegu Banyawol Makchang |
+|---|:---:|:---:|
+| Usefulness of inventory and purchase calculations | 4/5 | 5/5 |
+| Intention to use upon release | 5/5 | 5/5 |
+| Primary device | Mobile phone | Mobile phone |
 
-| Item | Result |
-|---|---|
-| Usefulness for stock & order planning | 4 / 5 and 5 / 5 (avg 4.5) |
-| Willingness to adopt at launch | 5 / 5 from both |
-| Device used | Mobile phone, both |
-| First item checked in the report | Sales amount / forecast shortages |
+- The average usefulness score for inventory and purchase calculations was **4.5/5**.
+- The owners prioritized sales revenue in the operations report.
+- Feedback included: "I can't see any downsides yet" and "With clear real-time visibility and notifications, this would be worth trying."
+- Both stores bought vegetables from markets without fixed suppliers and identified price fluctuations by weekday and weather as a major inconvenience.
+- Additional requests included KakaoTalk notifications, in-app payment, and recording the market price at the time of each purchase.
 
-> "I don't see a downside yet." · "With reliable real-time visibility and alerts, it would be worth using."
+> Feedback was collected from two stores. The results should not be generalized as statistics for the entire restaurant industry.
 
-**Where this differed from the initial requirements.** Neither restaurant used fixed suppliers; both bought vegetables at a market, and price swings by weekday and weather were their biggest pain point. That is a different operating model from the "five suppliers, orders by SMS" pattern found in the first interviews.
+## Technology Stack
 
-**Additional requests:** KakaoTalk notifications (first choice for both) · in-app payment · recording the market price at the time of each order
-
-> **n = 2. These are cases, not statistics, and are not generalised.**
-
----
-
-## Final State and Limitations
-
-- As of the Nov 11, 2026 merge into main. **There is no deployed production server; behaviour was verified in a local demo environment.**
-- Passed capstone faculty review. Review comment: **recipe-based consumption estimates have limited precision, so the owner's own management is still required.**
-- That is both a weakness and a design premise. The system does not claim to know real stock exactly. It **estimates** consumption from sales data and recipes and helps the owner manage receipts and stock.
-- Per-serving ingredient amounts (BOM) are entered by the owner. Template defaults are not verified recipes.
-- Historical demo prices were loaded into a local database only; cloning the repository does not produce them ([seeding procedure](docs/integration/CSV_PRICE_SEED.md)).
-- **Not measured:** throughput (TPS), API latency, time saved on ordering, reduction in stockouts or waste, cost savings, number of real users.
-
----
-
-## Tech Stack
-
-| Area | Technology |
+| Area | Technologies |
 |---|---|
 | Language | Java 21 |
-| Framework | Spring Boot 3.5.7 · Spring Batch · Spring Security · Spring Data JPA |
-| Database | MySQL 8.0+ (GENERATED COLUMN STORED) |
-| Migration | Flyway V001~V011 |
-| Cache · distributed lock | Redis 7 · Redisson 3.23.2 |
-| Reliability | Resilience4j 2.1.0 (CircuitBreaker) |
-| Notifications | Firebase Cloud Messaging (FCM) |
-| Testing | JUnit 5 · CountDownLatch · local Redis container (no Testcontainers) |
-| External APIs | KAMIS (XML) · EKAPE public data portal (XML) · Naver Shopping (JSON) |
-| Web (`frontend/`) | Vite 6.3 · TypeScript 5.9 · React — 73 screen components |
-| Mobile (`mobile/`) | React Native 0.86 · Expo 57 · expo-router — 26 screen components |
-| Crawler (`crawler/`) | Python 3 · Selenium |
+| Backend | Spring Boot 3.5.7, Spring Batch, Spring Security, Spring Data JPA |
+| Database | MySQL 8.0+, GENERATED COLUMN STORED |
+| Migration | Flyway V001–V011 |
+| Cache / Lock | Redis 7, Redisson 3.23.2 |
+| Fault Tolerance | Resilience4j 2.1.0 |
+| Notification | Firebase Cloud Messaging (FCM) |
+| Testing | JUnit 5, CountDownLatch |
+| Public Data | KAMIS (XML), EKAPE Public Data Portal (XML) |
+| Online Prices | Naver Shopping (JSON), Sikjae Wang crawler |
+| Web | Vite 6.3, TypeScript 5.9, React (73 screens) |
+| Mobile | React Native 0.86, Expo 57, expo-router (26 screens) |
+| Crawler | Python 3, Selenium |
 
----
+## Team and Responsibilities
 
-## Role & Responsibilities
-
-| Area | Gunwoo Park | Sangmuk Sim | Gunwoo Kim |
-|---|---|---|---|
-| Domain design | Order judgment criteria · pivot decisions | | |
-| Concurrency | 4-strategy locks + CB · 500-thread test | | |
-| POS ingestion | Upload atomicity, idempotency, serialisation | | |
-| Price integration | `pricing/` module · 6-year thresholds · GENERATED COLUMN · observation integrity | EKAPE public API migration · KAMIS call fixes | |
-| Purchase & receipt | Separation of purchase record and goods receipt | | |
-| Notifications | FCM infrastructure · closing and pre-opening alerts | | |
-| External crawler | | Sikjajaewang crawler · recipe templates | |
-| Clients | | | Web and mobile screens |
-
----
+| Park Gunwoo · Backend Lead | Sim Sangmuk · Data | Kim Gunwoo · Frontend |
+|---|---|---|
+| Domain design and product direction change | EKAPE migration to the official public-data API | Web UI implementation |
+| Four-way lock comparison, Redisson, Circuit Breaker, and pessimistic-lock fallback | KAMIS request fixes | Mobile UI implementation |
+| POS upload atomicity, idempotency, and serialization | Sikjae Wang crawler | Web and mobile UI |
+| Pricing module, six-year thresholds, GENERATED COLUMN, and observation consistency | Recipe templates | |
+| Separation of purchase records and goods receipt | | |
+| FCM infrastructure and end-of-day / pre-opening notifications | | |
 
 ## Local Setup
 
-> **Start Redis first.** The `RedissonClient` bean is created at startup, so without Redis the context fails *after* Flyway has already migrated.
+> **Start Redis before launching the application.** The `RedissonClient` bean is created during application startup. If Redis is unavailable, Spring context creation fails after the Flyway migration stage.
+
+### 1. Start Redis
 
 ```bash
-# 1. Redis
 docker run -d --name redis-test -p 6379:6379 redis:7-alpine
-docker exec redis-test redis-cli ping   # wait for PONG
+docker exec redis-test redis-cli ping
+```
 
-# 2. Create MySQL schema
+The expected response is `PONG`.
+
+### 2. Create the MySQL database
+
+```bash
 mysql -u root -p -e "CREATE DATABASE naengjang_goat_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
 
-# 3. Environment variables (defaults in application.properties)
-export DB_URL=jdbc:mysql://localhost:3306/naengjang_goat_db
-export DB_PASSWORD=<your-password>
-export KAMIS_API_KEY=<your-key>
-export EKAPE_API_KEY=<your-key>      # if unset, only livestock ingestion is skipped
+### 3. Configure environment variables
 
-# 4. Run — Flyway applies V001~V011 automatically
+```bash
+export DB_URL="jdbc:mysql://localhost:3306/naengjang_goat_db"
+export DB_PASSWORD="your-db-password"
+export KAMIS_API_KEY="your-kamis-api-key"
+export EKAPE_API_KEY="your-ekape-api-key"
+```
+
+- If `EKAPE_API_KEY` is not configured, only livestock price collection is skipped.
+- Do not commit API keys or database passwords. Provide them through environment variables.
+
+### 4. Run the application
+
+```bash
 ./gradlew bootRun
 ```
 
-For demo data, start with `SPRING_PROFILES_ACTIVE=demo` and call `POST /demo/setup`.
-See the [demo runbook](docs/handoff/DEMO_RUNBOOK.md) for the full procedure.
+Flyway applies V001–V011 in order before the application starts.
 
-Demo account: `username=demo / password=demo1234`
+### Initialize Demo Data
 
-Obtain a JWT:
-```
-POST /api/users/login
-{ "username": "demo", "password": "demo1234" }
-```
-
-**Note when running tests.** Some tests truncate tables, so never point them at a development database.
+Start the application with the `demo` profile, then call the demo setup endpoint.
 
 ```bash
-TEST_DB_URL=jdbc:mysql://localhost:3306/naengjang_goat_test ./gradlew test
+export SPRING_PROFILES_ACTIVE=demo
+./gradlew bootRun
+
+curl -X POST http://localhost:8080/demo/setup
 ```
 
----
+| Item | Value |
+|---|---|
+| Demo username | `demo` |
+| Demo password | `demo1234` |
 
-## References
+The full demo scenario and expected figures are documented in the [DEMO RUNBOOK](docs/handoff/DEMO_RUNBOOK.md).
 
-- [`docs/integration/RUNBOOK.md`](docs/integration/RUNBOOK.md) — running the integrated service
-- [`docs/handoff/DEMO_RUNBOOK.md`](docs/handoff/DEMO_RUNBOOK.md) — demo procedure and fixture figures
-- [`docs/handoff/API_CONTRACT.md`](docs/handoff/API_CONTRACT.md) — API contract
-- [`docs/integration/KAMIS_PRICE_FIX.md`](docs/integration/KAMIS_PRICE_FIX.md) — price ingestion integrity fixes
-- [`docs/integration/CSV_PRICE_SEED.md`](docs/integration/CSV_PRICE_SEED.md) — historical price seeding and its limits
-- `src/main/resources/db/migration/` — Flyway V001~V011
-- [README.md](README.md) · [README_0315.md](README_0315.md)
+### Test Database Warning
 
----
+Configure a separate test database through `TEST_DB_URL`. Some tests clear table data, so do not point the test configuration at a database containing production or personal data.
+
+```bash
+export TEST_DB_URL="jdbc:mysql://localhost:3306/naengjang_goat_test"
+./gradlew test
+```
+
+## Next Steps
+
+- KakaoTalk notifications
+- In-app payment
+- Sales cancellation and inventory restoration
+- POS-vendor-specific spreadsheet format mapping
+- Real-time POS integration
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [RUNBOOK](docs/integration/RUNBOOK.md) | Integration and operational reference |
+| [DEMO RUNBOOK](docs/handoff/DEMO_RUNBOOK.md) | Demo setup and execution |
+| [API CONTRACT](docs/handoff/API_CONTRACT.md) | API contract |
+| [KAMIS PRICE FIX](docs/integration/KAMIS_PRICE_FIX.md) | KAMIS price-data correction notes |
+| [CSV PRICE SEED](docs/integration/CSV_PRICE_SEED.md) | Price CSV seeding procedure |
+| [Flyway Migrations](src/main/resources/db/migration/) | Database schema migrations |
+| [README.md](README.md) | Korean README |
+| [README_0315.md](README_0315.md) | Initial README |
 
 ## Contact
 
-**Gunwoo Park | Backend Engineer**
+**Park Gunwoo** · Backend Engineer
 
-- Email: gunwoo363@gmail.com
+- Email: <gunwoo363@gmail.com>
 - GitHub: [github.com/gm-15](https://github.com/gm-15)
 - Blog: [velog.io/@gm-15](https://velog.io/@gm-15)

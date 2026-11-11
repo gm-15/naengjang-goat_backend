@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 800" width="1680" height="800" font-family="'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR','Segoe UI',sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/>
+    </marker>
+    <marker id="arO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#C5500B"/>
+    </marker>
+    <marker id="arL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1A73E8"/>
+    </marker>
+  </defs>
+
+  <rect width="1680" height="800" fill="#ffffff"/>
+
+  <text x="840" y="44" text-anchor="middle" font-size="26" font-weight="700" fill="#202124">냉장GOAT — 판매자료가 다음 발주로 이어지는 흐름</text>
+  <text x="840" y="72" text-anchor="middle" font-size="14.5" fill="#5f6368">점주는 영업 중 기존 POS를 그대로 쓰고, 하루 판매자료를 한 번 올리면 재고 반영·발주 판단·구매 기록·수령 입고가 이어진다</text>
+
+  <!-- phase headers -->
+  <g font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle">
+    <rect x="156" y="98" width="288" height="34" rx="17" fill="#5f6368"/><text x="300" y="121">① 영업 마감</text>
+    <rect x="456" y="98" width="288" height="34" rx="17" fill="#5f6368"/><text x="600" y="121">② 재고 반영</text>
+    <rect x="756" y="98" width="288" height="34" rx="17" fill="#C5500B"/><text x="900" y="121">③ 발주 판단</text>
+    <rect x="1056" y="98" width="288" height="34" rx="17" fill="#5f6368"/><text x="1200" y="121">④ 구매</text>
+    <rect x="1356" y="98" width="288" height="34" rx="17" fill="#5f6368"/><text x="1500" y="121">⑤ 수령 입고</text>
+  </g>
+
+  <!-- lane labels -->
+  <g font-size="14" font-weight="700" fill="#3c4043" text-anchor="middle">
+    <text x="80" y="200">점주</text>
+    <text x="80" y="218" font-size="11.5" font-weight="400" fill="#80868b">하는 일</text>
+    <text x="80" y="370">백엔드</text>
+    <text x="80" y="388" font-size="11.5" font-weight="400" fill="#80868b">처리</text>
+    <text x="80" y="532">정합성</text>
+    <text x="80" y="550" font-size="11.5" font-weight="400" fill="#80868b">보장</text>
+  </g>
+  <line x1="150" y1="150" x2="150" y2="585" stroke="#dadce0" stroke-width="1"/>
+
+  <!-- owner lane -->
+  <g>
+    <rect x="156" y="160" width="288" height="86" rx="10" fill="#E8F0FE" stroke="#1A73E8" stroke-width="1.4"/>
+    <text x="300" y="190" text-anchor="middle" font-size="14.5" font-weight="700" fill="#174EA6">판매 엑셀 업로드</text>
+    <text x="300" y="214" text-anchor="middle" font-size="12.5" fill="#3c4043">영업 종료 후 기존 POS에서 받은</text>
+    <text x="300" y="232" text-anchor="middle" font-size="12.5" fill="#3c4043">하루치 파일 1건을 올린다</text>
+
+    <rect x="456" y="160" width="288" height="86" rx="10" fill="#F1F3F4" stroke="#dadce0" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="600" y="198" text-anchor="middle" font-size="13" fill="#80868b">점주 입력 없음</text>
+    <text x="600" y="220" text-anchor="middle" font-size="12" fill="#9aa0a6">메뉴별 재입력을 하지 않는다</text>
+
+    <rect x="756" y="160" width="288" height="86" rx="10" fill="#E8F0FE" stroke="#1A73E8" stroke-width="1.4"/>
+    <text x="900" y="190" text-anchor="middle" font-size="14.5" font-weight="700" fill="#174EA6">리포트·추천 확인</text>
+    <text x="900" y="214" text-anchor="middle" font-size="12.5" fill="#3c4043">오늘 매출과 소비량, 부족 예상</text>
+    <text x="900" y="232" text-anchor="middle" font-size="12.5" fill="#3c4043">재료와 권장 수량을 본다</text>
+
+    <rect x="1056" y="160" width="288" height="86" rx="10" fill="#E8F0FE" stroke="#1A73E8" stroke-width="1.4"/>
+    <text x="1200" y="190" text-anchor="middle" font-size="14.5" font-weight="700" fill="#174EA6">외부 사이트에서 직접 구매</text>
+    <text x="1200" y="214" text-anchor="middle" font-size="12.5" fill="#3c4043">앱은 주문·결제를 대행하지 않는다</text>
+    <text x="1200" y="232" text-anchor="middle" font-size="12.5" fill="#3c4043">구매 내용만 앱에 기록한다</text>
+
+    <rect x="1356" y="160" width="288" height="86" rx="10" fill="#E8F0FE" stroke="#1A73E8" stroke-width="1.4"/>
+    <text x="1500" y="190" text-anchor="middle" font-size="14.5" font-weight="700" fill="#174EA6">수령 확인</text>
+    <text x="1500" y="214" text-anchor="middle" font-size="12.5" fill="#3c4043">재료가 도착하면 입고일과</text>
+    <text x="1500" y="232" text-anchor="middle" font-size="12.5" fill="#3c4043">유통기한을 확인해 처리한다</text>
+  </g>
+
+  <!-- owner -> backend connectors -->
+  <g stroke="#1A73E8" stroke-width="1.8" marker-end="url(#arL)">
+    <line x1="300" y1="246" x2="300" y2="286"/>
+    <line x1="900" y1="286" x2="900" y2="250" marker-end="url(#arL)"/>
+    <line x1="1200" y1="246" x2="1200" y2="286"/>
+    <line x1="1500" y1="246" x2="1500" y2="286"/>
+  </g>
+
+  <!-- backend lane -->
+  <g>
+    <rect x="156" y="290" width="288" height="162" rx="10" fill="#E6F4EA" stroke="#188038" stroke-width="1.4"/>
+    <text x="300" y="318" text-anchor="middle" font-size="14.5" font-weight="700" fill="#0D652D">파일 수신 · 검증</text>
+    <text x="176" y="344" font-size="12.5" fill="#3c4043">· 헤더 5열 확인</text>
+    <text x="176" y="366" font-size="11.5" fill="#5f6368">  영업일·메뉴코드·메뉴명·판매수량·판매금액</text>
+    <text x="176" y="390" font-size="12.5" fill="#3c4043">· 파일 바이트 SHA-256 계산</text>
+    <text x="176" y="414" font-size="12.5" fill="#3c4043">· 점주 행 잠금으로 직렬화</text>
+    <text x="176" y="438" font-size="12.5" fill="#3c4043">· 5MB 이하 단일 파일</text>
+
+    <rect x="456" y="290" width="288" height="162" rx="10" fill="#E6F4EA" stroke="#188038" stroke-width="1.4"/>
+    <text x="600" y="318" text-anchor="middle" font-size="14.5" font-weight="700" fill="#0D652D">레시피 환산 · 재고 차감</text>
+    <text x="476" y="346" font-size="12.5" fill="#3c4043">메뉴 판매량</text>
+    <text x="476" y="368" font-size="12.5" fill="#3c4043">　↓ 레시피(BOM)</text>
+    <text x="476" y="390" font-size="12.5" fill="#3c4043">재료별 소모량 (단위 변환)</text>
+    <text x="476" y="412" font-size="12.5" fill="#3c4043">　↓ 유통기한 순(FIFO)</text>
+    <text x="476" y="434" font-size="12.5" fill="#3c4043">재고 배치 차감 · 소비량 스냅샷 저장</text>
+
+    <rect x="756" y="290" width="288" height="162" rx="10" fill="#E8710A" stroke="#C5500B" stroke-width="1.6"/>
+    <text x="900" y="316" text-anchor="middle" font-size="14.5" font-weight="700" fill="#ffffff">구매 판단 3축</text>
+    <line x1="772" y1="326" x2="1028" y2="326" stroke="#ffffff" stroke-opacity="0.45"/>
+    <text x="776" y="350" font-size="12.5" font-weight="700" fill="#ffffff">얼마나</text>
+    <text x="856" y="350" font-size="12" fill="#FDE4D0">일평균 소비량 × 발주일까지 일수</text>
+    <text x="856" y="368" font-size="12" fill="#FDE4D0">− 가용 재고 = 권장 수량</text>
+    <text x="776" y="394" font-size="12.5" font-weight="700" fill="#ffffff">언제</text>
+    <text x="856" y="394" font-size="12" fill="#FDE4D0">공공 시세 추이 · 품목군별 임계값</text>
+    <text x="856" y="412" font-size="12" fill="#FDE4D0">현재가 &lt; 월평균 × (1 − threshold)</text>
+    <text x="776" y="438" font-size="12.5" font-weight="700" fill="#ffffff">어디서</text>
+    <text x="856" y="438" font-size="12" fill="#FDE4D0">온라인 판매가를 kg당 단가로 환산</text>
+
+    <rect x="1056" y="290" width="288" height="162" rx="10" fill="#E6F4EA" stroke="#188038" stroke-width="1.4"/>
+    <text x="1200" y="318" text-anchor="middle" font-size="14.5" font-weight="700" fill="#0D652D">구매 기록 저장</text>
+    <text x="1076" y="346" font-size="12.5" fill="#3c4043">· 상품명·링크·수량·단가·거래처</text>
+    <text x="1076" y="370" font-size="12.5" fill="#3c4043">· 상태 = 배송 대기</text>
+    <text x="1076" y="398" font-size="13" font-weight="700" fill="#C5500B">· 재고는 늘지 않는다</text>
+    <text x="1076" y="420" font-size="11.5" fill="#5f6368">  아직 오지 않은 재료를 가용 재고로</text>
+    <text x="1076" y="438" font-size="11.5" fill="#5f6368">  세면 판단이 틀어지기 때문</text>
+
+    <rect x="1356" y="290" width="288" height="162" rx="10" fill="#E6F4EA" stroke="#188038" stroke-width="1.4"/>
+    <text x="1500" y="318" text-anchor="middle" font-size="14.5" font-weight="700" fill="#0D652D">입고 처리</text>
+    <text x="1376" y="346" font-size="12.5" fill="#3c4043">· 수령 수량으로 재고 배치 생성</text>
+    <text x="1376" y="370" font-size="12.5" fill="#3c4043">· 입고일·유통기한 기록</text>
+    <text x="1376" y="394" font-size="12.5" fill="#3c4043">· 발주 이력 상태를 입고 완료로</text>
+    <text x="1376" y="422" font-size="12.5" fill="#3c4043">· 이 시점에만 재고가 증가</text>
+  </g>
+
+  <!-- backend chain arrows -->
+  <g stroke="#5f6368" stroke-width="2" marker-end="url(#ar)">
+    <line x1="444" y1="371" x2="454" y2="371"/>
+    <line x1="744" y1="371" x2="754" y2="371"/>
+    <line x1="1044" y1="371" x2="1054" y2="371"/>
+    <line x1="1344" y1="371" x2="1354" y2="371"/>
+  </g>
+
+  <!-- guarantee lane -->
+  <g>
+    <rect x="156" y="476" width="288" height="96" rx="8" fill="#FEF7E0" stroke="#F9AB00" stroke-width="1.2"/>
+    <text x="300" y="500" text-anchor="middle" font-size="13" font-weight="700" fill="#976900">멱등성</text>
+    <text x="172" y="524" font-size="11.5" fill="#3c4043">UNIQUE(점주, 파일 해시)</text>
+    <text x="172" y="542" font-size="11.5" fill="#5f6368">동일 파일 재업로드는 기존 결과 반환, 무차감</text>
+    <text x="172" y="562" font-size="11.5" fill="#5f6368">UNIQUE(점주, 영업일) → 같은 날 다른 파일 409</text>
+
+    <rect x="456" y="476" width="288" height="96" rx="8" fill="#FEF7E0" stroke="#F9AB00" stroke-width="1.2"/>
+    <text x="600" y="500" text-anchor="middle" font-size="13" font-weight="700" fill="#976900">원자성</text>
+    <text x="472" y="524" font-size="11.5" fill="#3c4043">업로드 1건 = 트랜잭션 1개</text>
+    <text x="472" y="542" font-size="11.5" fill="#5f6368">형식·메뉴 매칭·단위 변환·재고 부족 중</text>
+    <text x="472" y="560" font-size="11.5" fill="#5f6368">하나라도 실패하면 전체 미반영</text>
+
+    <rect x="756" y="476" width="288" height="96" rx="8" fill="#FEF7E0" stroke="#F9AB00" stroke-width="1.2"/>
+    <text x="900" y="500" text-anchor="middle" font-size="13" font-weight="700" fill="#976900">가용 재고 정의</text>
+    <text x="772" y="524" font-size="11.5" fill="#3c4043">입고일 ≤ 오늘 ≤ 유통기한</text>
+    <text x="772" y="542" font-size="11.5" fill="#5f6368">만료분과 아직 입고되지 않은 분은</text>
+    <text x="772" y="560" font-size="11.5" fill="#5f6368">판단에서 제외</text>
+
+    <rect x="1056" y="476" width="588" height="96" rx="8" fill="#FEF7E0" stroke="#F9AB00" stroke-width="1.2"/>
+    <text x="1350" y="500" text-anchor="middle" font-size="13" font-weight="700" fill="#976900">구매와 입고의 분리 · 동시 요청 직렬화</text>
+    <text x="1072" y="524" font-size="11.5" fill="#3c4043">구매 기록은 재고를 바꾸지 않고, 수령 입고에서만 1회 증가</text>
+    <text x="1072" y="542" font-size="11.5" fill="#5f6368">점주 행과 재고 배치에 비관적 락을 걸어 동시 요청을 직렬화</text>
+    <text x="1072" y="562" font-size="11.5" fill="#5f6368">측정: 동일 파일 6건 동시 업로드 → 신규 반영 1건 · 동시 입고 6건 → 성공 1건</text>
+  </g>
+
+  <!-- loop back -->
+  <path d="M 1500 578 L 1500 622 L 300 622 L 300 600" fill="none" stroke="#C5500B" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arO)"/>
+  <rect x="640" y="604" width="520" height="36" rx="8" fill="#FBE9DC" stroke="#C5500B" stroke-width="1.2"/>
+  <text x="900" y="627" text-anchor="middle" font-size="12.5" fill="#8A3A05">다음 영업 전 — 현재 재고로 다시 판단하고 부족 예상 재료를 알린다</text>
+
+  <!-- notifications -->
+  <rect x="156" y="662" width="1488" height="58" rx="8" fill="#F8F9FA" stroke="#dadce0" stroke-width="1.2"/>
+  <text x="176" y="686" font-size="13" font-weight="700" fill="#3c4043">알림</text>
+  <text x="232" y="686" font-size="12.5" fill="#3c4043">UPLOAD — 판매 반영 직후, 오늘 소비량과 발주 판단 근거</text>
+  <text x="760" y="686" font-size="12.5" fill="#3c4043">OPENING — 영업 시작 3시간 전, 현재 재고 기준 재판단</text>
+  <text x="232" y="706" font-size="11.5" fill="#5f6368">이벤트 키로 같은 건을 두 번 만들지 않고, 실패 시 3회 재시도 후 24시간이 지나면 만료 처리한다</text>
+
+  <!-- legend -->
+  <g font-size="12" fill="#5f6368">
+    <rect x="156" y="748" width="14" height="14" rx="3" fill="#E8F0FE" stroke="#1A73E8"/><text x="178" y="760">점주 행동</text>
+    <rect x="266" y="748" width="14" height="14" rx="3" fill="#E6F4EA" stroke="#188038"/><text x="288" y="760">백엔드 처리</text>
+    <rect x="386" y="748" width="14" height="14" rx="3" fill="#E8710A" stroke="#C5500B"/><text x="408" y="760">판단 엔진</text>
+    <rect x="500" y="748" width="14" height="14" rx="3" fill="#FEF7E0" stroke="#F9AB00"/><text x="522" y="760">정합성 보장</text>
+  </g>
+</svg>
