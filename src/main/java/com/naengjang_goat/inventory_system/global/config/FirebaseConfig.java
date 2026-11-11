@@ -33,10 +33,17 @@ public class FirebaseConfig {
                 log.warn("[FIREBASE] 서비스 계정 파일 없음 — FCM 비활성화. 파일 위치: {}", firebaseConfigResource);
                 return null;
             }
+            // 이미 초기화된 앱이 있으면 재사용 (DevTools 재시작·테스트 컨텍스트 대응)
+            if (!FirebaseApp.getApps().isEmpty()) {
+                log.info("[FIREBASE] 기존 FirebaseApp 재사용");
+                return FirebaseApp.getInstance();
+            }
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(firebaseConfigResource.getInputStream()))
                     .build();
-            return FirebaseApp.initializeApp(options);
+            FirebaseApp app = FirebaseApp.initializeApp(options);
+            log.info("[FIREBASE] FirebaseApp 초기화 성공 — FCM 활성화");
+            return app;
         } catch (IOException e) {
             log.error("[FIREBASE] 초기화 실패 — FCM 비활성화", e);
             return null;
