@@ -463,7 +463,7 @@ export TEST_DB_URL="jdbc:mysql://localhost:3306/naengjang_goat_test"
 | [CSV PRICE SEED](docs/integration/CSV_PRICE_SEED.md) | 시세 CSV 적재 절차 |
 | [Flyway Migrations](src/main/resources/db/migration/) | DB 스키마 마이그레이션 |
 | [README.en.md](README.en.md) | English README |
-| [README_0315.md](README_0315.md) | 초기 README |
+| [README_0315.md](archive/README_0315.md) | 초기 README |
 
 ## 연락처
 

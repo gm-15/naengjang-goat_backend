@@ -465,7 +465,7 @@ export TEST_DB_URL="jdbc:mysql://localhost:3306/naengjang_goat_test"
 | [CSV PRICE SEED](docs/integration/CSV_PRICE_SEED.md) | Price CSV seeding procedure |
 | [Flyway Migrations](src/main/resources/db/migration/) | Database schema migrations |
 | [README.md](README.md) | Korean README |
-| [README_0315.md](README_0315.md) | Initial README |
+| [README_0315.md](archive/README_0315.md) | Initial README |
 
 ## Contact
 
