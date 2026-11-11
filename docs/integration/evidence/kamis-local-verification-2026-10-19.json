@@ -1,0 +1,52 @@
+{
+  "recordedAt": "2026-10-19 (KST)",
+  "recordedBy": "park, local PC (Claude Code session)",
+  "purpose": "Codex 클라우드에서 프록시 403 으로 확인하지 못한 KAMIS 공식 호출 실적재를 로컬에서 확인한 기록",
+  "scope": "로컬 백엔드 + 로컬 MySQL. 실기기(APK) 흐름과 두 알림 실수신은 포함하지 않는다.",
+  "environment": {
+    "commit": "ca3c5812880600331b86e11e7378ca3402b9d341 (origin/main, PR #4 merge)",
+    "java": "21.0.6",
+    "mysql": "8.0 (local)",
+    "redis": "docker redis:7-alpine",
+    "database": "naengjang_goat_demo",
+    "profile": "demo"
+  },
+  "backendTests": {
+    "command": "gradlew test bootJar --no-daemon --max-workers=4",
+    "testDatabase": "naengjang_goat_test (TEST_DB_URL)",
+    "junitXmlTotals": { "tests": 64, "skipped": 0, "failuresAndErrors": 0, "classes": 12 },
+    "note": "ChaosTest 는 docker 컨테이너 이름 redis-test 가 필요해 6379 에 redis-test 를 띄우고 실행했다."
+  },
+  "kamisLiveIngestion": {
+    "script": "scripts/verify-kamis-batch.py --base-url http://localhost:8080",
+    "batchRuns": [
+      { "executionId": 2, "status": "COMPLETED", "readCount": 196, "filteredCount": 176, "writtenItems": 20 },
+      { "executionId": 3, "status": "COMPLETED", "readCount": 196, "filteredCount": 176, "writtenItems": 20 }
+    ],
+    "earlierManualRun": { "executionId": 1, "status": "COMPLETED", "readCount": 196, "filteredCount": 176, "writtenItems": 20, "elapsedSeconds": 5.5 },
+    "databaseAudit": {
+      "script": "scripts/audit-kamis-data.sql",
+      "kamisStoredRows": 2225,
+      "trustedKamisRows": 2225,
+      "latestTrustedDate": "2026-10-16",
+      "bySourceAndBasis": [
+        { "source": "KAMIS", "priceBasis": "WHOLESALE", "rows": 20, "ingredients": 9, "observationDays": 1, "firstDate": "2026-10-16", "lastDate": "2026-10-16" },
+        { "source": "KAMIS", "priceBasis": "RETAIL", "rows": 2205, "ingredients": 9, "observationDays": 245, "firstDate": "2025-10-17", "lastDate": "2026-10-16", "origin": "CSV_SEED (시연용 적재, 실수집 아님)" },
+        { "source": "EKAPE", "priceBasis": "RETAIL", "rows": 1093, "ingredients": 4, "observationDays": 365, "firstDate": "2025-10-17", "lastDate": "2026-10-16", "origin": "CSV_SEED (시연용 적재, 실수집 아님)" },
+        { "source": "DEMO", "priceBasis": "WHOLESALE", "rows": 30, "ingredients": 1, "observationDays": 30, "origin": "demo setup 합성 자료" }
+      ],
+      "duplicateObservationCombinations": 0
+    },
+    "conclusion": "공식 KAMIS 호출이 로컬에서 성공했고, 같은 배치를 연속 2회 실행해도 관측 행이 20행 그대로 유지돼 중복 적재가 없음을 확인했다. 관측일은 2026-10-16(직전 평일)로 저장됐다."
+  },
+  "ekapeLiveIngestion": {
+    "status": "확인 안 함",
+    "reason": "main 의 EkapeApiClient 는 여전히 ekapepia.com/v3/.../excel.do HTML 파싱 방식이다. 해당 엔드포인트는 2026-09 사이트 개편 이후 데이터 표를 반환하지 않는다. 공공데이터포털 정식 API 전환본(브랜치 feat/ekape-official-api)은 main 에 병합되지 않았다.",
+    "currentLivestockData": "CSV 시드(소매) 뿐이며 실수집 0행"
+  },
+  "notVerifiedHere": [
+    "최신 APK 실기기 전체 흐름 (파일 선택 → POS 업로드 → 차감 → 리포트 → 판단 → 외부 사이트 → 구매 기록 → 수령 입고)",
+    "UPLOAD / OPENING 두 알림의 실제 기기 수신과 상세 이동 (서버 Firebase 서비스 계정 미설정, 전달 상태 NOT_CONFIGURED)",
+    "영업 시작 3시간 전 실제 스케줄 발송 (demo 수동 트리거와 구분)"
+  ]
+}
